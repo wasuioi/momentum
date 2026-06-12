@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   WEIGHTS, DEFAULT_TARGETS, pillarPoints, dayPoints, dayScore, dayStatus,
+  toDateStr, prevDate, addDays, startOfWeek, streak,
 } from '../score.js';
 
 const T = { ...DEFAULT_TARGETS }; // {skill:240, uni:120, health:60, fin:20, eng:30, mind:10}
@@ -52,4 +53,29 @@ test('dayStatus thresholds', () => {
   assert.equal(dayStatus(79), 'yellow');
   assert.equal(dayStatus(40), 'yellow');
   assert.equal(dayStatus(39), 'red');
+});
+
+test('date helpers', () => {
+  assert.equal(toDateStr(new Date(2026, 5, 12)), '2026-06-12'); // month is 0-based
+  assert.equal(prevDate('2026-06-01'), '2026-05-31');
+  assert.equal(addDays('2026-06-12', -35), '2026-05-08');
+  assert.equal(addDays('2026-06-12', 2), '2026-06-14');
+  assert.equal(startOfWeek('2026-06-12'), '2026-06-08'); // Fri -> Monday
+  assert.equal(startOfWeek('2026-06-08'), '2026-06-08'); // Monday stays
+});
+
+test('streak counts consecutive days >= 40 back from today', () => {
+  const s = { '2026-06-12': 80, '2026-06-11': 45, '2026-06-10': 90 };
+  assert.equal(streak(s, '2026-06-12'), 3);
+});
+
+test('streak: today below 40 does not break it (day not finished)', () => {
+  const s = { '2026-06-12': 10, '2026-06-11': 45, '2026-06-10': 90 };
+  assert.equal(streak(s, '2026-06-12'), 2);
+});
+
+test('streak: red day or missing day breaks it', () => {
+  assert.equal(streak({ '2026-06-12': 80, '2026-06-11': 20, '2026-06-10': 90 }, '2026-06-12'), 1);
+  assert.equal(streak({ '2026-06-12': 80, '2026-06-10': 90 }, '2026-06-12'), 1);
+  assert.equal(streak({}, '2026-06-12'), 0);
 });

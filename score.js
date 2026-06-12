@@ -30,3 +30,34 @@ export function dayScore(points) {
 export function dayStatus(score) {
   return score >= 80 ? 'green' : score >= 40 ? 'yellow' : 'red';
 }
+
+// ---- date helpers (local time; date strings are 'YYYY-MM-DD') ----
+
+export function toDateStr(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+export function addDays(dateStr, n) {
+  const d = new Date(dateStr + 'T00:00:00');
+  d.setDate(d.getDate() + n);
+  return toDateStr(d);
+}
+
+export function prevDate(dateStr) {
+  return addDays(dateStr, -1);
+}
+
+export function startOfWeek(dateStr) {
+  const d = new Date(dateStr + 'T00:00:00');
+  return addDays(dateStr, -((d.getDay() + 6) % 7)); // Monday-based week
+}
+
+// ---- streak ----
+
+export function streak(scoreByDate, todayStr) {
+  let d = todayStr;
+  if ((scoreByDate[d] ?? 0) < 40) d = prevDate(d); // today is still in progress
+  let n = 0;
+  while ((scoreByDate[d] ?? 0) >= 40) { n++; d = prevDate(d); }
+  return n;
+}
