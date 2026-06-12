@@ -156,7 +156,118 @@ async function renderWeek() {
   renderNavTimer();
 }
 
-async function renderMonth() { $('#view').innerHTML = '<p class="loading">Month</p>'; }
+function monthName(m) {
+  return ['January', 'February', 'March', 'April', 'May', 'June', 'July',
+    'August', 'September', 'October', 'November', 'December'][m];
+}
+
+async function renderMonth() {
+  const base = new Date(today + 'T00:00:00');
+  base.setDate(1);
+  base.setMonth(base.getMonth() + monthOffset);
+  const y = base.getFullYear(), m = base.getMonth();
+  const first = S.toDateStr(new Date(y, m, 1));
+  const last = S.toDateStr(new Date(y, m + 1, 0));
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+
+  const trendFrom = S.addDays(today, -60);
+  const rows = await db.getDays(first < trendFrom ? first : trendFrom, last > today ? last : today);
+  const byDate = {}; for (const r of rows) byDate[r.date] = r;
+  const monthRows = rows.filter(r => r.date >= first && r.date <= last);
+
+  const avg = monthRows.length ? Math.round(monthRows.reduce((a, r) => a + r.score, 0) / monthRows.length) : 0;
+  const greens = monthRows.filter(r => r.score >= 80).length;
+  const scoreByDate = {}; for (const r of monthRows) scoreByDate[r.date] = r.score;
+  const best = S.bestStreak(scoreByDate);
+
+  // life trend — always anchored to today (spec §7)
+  const trendRows = {};
+  for (const r of rows) trendRows[r.date] = { points: r.data.points || {}, score: r.score };
+  const trend = S.lifeTrend(trendRows, today);
+  const tRow = (label, v, big = false) => {
+    const cls = v === null ? 'flat' : v >= 0 ? 'up' : 'down';
+    const txt = v === null ? '—' : `${v >= 0 ? '▲ +' : '▼ −'}${Math.abs(v)}%`;
+    return `<div class="t-row ${big ? 'big' : ''}"><span>${label}</span><b class="${cls}">${txt}</b></div>`;
+  };
+  const trendHtml = tRow('Overall', trend.overall, true)
+    + PILLARS.map(p => tRow(`${p.icon} ${p.name}`, trend.pillars[p.key])).join('')
+    + tRow('🌱 Reflection', trend.pillars.refl);
+
+  // calendar, Monday-first
+  const firstWd = (new Date(y, m, 1).getDay() + 6) % 7;
+  let cells = '<em>M</em><em>T</em><em>W</em><em>T</em><em>F</em><em>S</em><em>S</em>'
+    + '<div class="c blank"></div>'.repeat(firstWd);
+  for (let n = 1; n <= daysInMonth; n++) {
+    const d = S.toDateStr(new Date(y, m, n));
+    const r = byDate[d];
+    let cls = 'c';
+    if (d > today) cls += ' future';
+    else if (r) {
+      const st = S.dayStatus(r.score);
+      cls += ' ' + (st === 'green' && r.score >= 90 ? 'green2' : st);
+    }
+    if (d === today) cls += ' today';
+    cells += `<div class="${cls}">${n}</div>`;
+  }
+
+  // score line chart
+  const pts = monthRows.map(r => {
+    const n = Number(r.date.slice(8));
+    const x = Math.round(14 + (n - 1) / Math.max(1, daysInMonth - 1) * 312);
+    const yy = Math.round(102 - r.score / 100 * 88);
+    return `${x},${yy}`;
+  });
+  const lastPt = pts.length ? pts[pts.length - 1].split(',') : null;
+  const chart = `
+    <svg viewBox="0 0 340 110" preserveAspectRatio="none">
+      <line class="gl" x1="0" y1="14" x2="340" y2="14"/><text class="glt" x="2" y="11">100</text>
+      <line class="gl" x1="0" y1="58" x2="340" y2="58"/><text class="glt" x="2" y="55">50</text>
+      <line class="gl" x1="0" y1="102" x2="340" y2="102"/><text class="glt" x="2" y="99">0</text>
+      ${pts.length > 1 ? `<polyline points="${pts.join(' ')}" fill="none" stroke="#3DDC84"
+        stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>` : ''}
+      ${lastPt ? `<circle cx="${lastPt[0]}" cy="${lastPt[1]}" r="4" fill="#3DDC84"/>` : ''}
+    </svg>`;
+
+  const totals = PILLARS.map(p => ({
+    p, mins: monthRows.reduce((a, r) => a + (r.data.minutes?.[p.key] ?? 0), 0),
+  }));
+  const maxT = Math.max(60, ...totals.map(t => t.mins));
+  const totalsHtml = totals.map(({ p, mins }) => `
+    <div class="hb" style="--c:var(--${p.key})"><i>${p.icon}</i>
+      <div class="track"><b style="width:${Math.round(mins / maxT * 100)}%"></b></div>
+      <span>${(mins / 60).toFixed(1)} h</span></div>`).join('');
+
+  const wins = monthRows.filter(r => r.data.win && r.data.win.trim())
+    .map(r => `<div><em>${monthName(m).slice(0, 3)} ${Number(r.date.slice(8))}</em><b>${esc(r.data.win)}</b></div>`)
+    .join('') || '<span>No wins recorded yet.</span>';
+
+  $('#view').innerHTML = `
+    <div class="headrow">
+      <div><h1>${monthName(m)} ${y}</h1><p>Monthly review</p></div>
+      <div class="navbtns">
+        <button data-action="monthnav" data-dir="-1">‹</button>
+        <button data-action="monthnav" data-dir="1">›</button>
+      </div>
+    </div>
+    <div class="stats3">
+      <div class="stat3"><b>${avg}</b><span>AVG SCORE</span></div>
+      <div class="stat3"><b>${greens}</b><span>GREEN DAYS</span></div>
+      <div class="stat3"><b>🔥 ${best}</b><span>BEST STREAK</span></div>
+    </div>
+    <section class="card"><h2>Life trend — last 30 days vs previous</h2>${trendHtml}</section>
+    <section class="card"><h2>Calendar</h2><div class="cal">${cells}</div>
+      <div class="legend">
+        <span><i style="background:rgba(61,220,132,.35)"></i>Green 80+</span>
+        <span><i style="background:rgba(242,201,76,.35)"></i>Yellow 40–79</span>
+        <span><i style="background:rgba(248,97,90,.35)"></i>Red &lt;40</span>
+      </div></section>
+    <section class="card"><h2>Score trend</h2><div class="chart">${chart}</div></section>
+    <section class="card"><h2>Totals this month</h2>${totalsHtml}</section>
+    <section class="card"><h2>Wins this month</h2><div class="winlist">${wins}</div></section>
+    ${timer ? trackNowHtml() : ''}`;
+  renderNavTimer();
+}
+
 async function renderSettings() { $('#view').innerHTML = '<p class="loading">Settings</p>'; }
 async function toggleTimer(pillar) {
   if (timer && timer.pillar === pillar) { await stopTimer(); await render(); return; }
