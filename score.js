@@ -108,3 +108,17 @@ export function lifeTrend(rowsByDate, todayStr) {
   out.overall = (!hasPrev || prevAvg === 0) ? null : Math.round((avg(curWin) - prevAvg) / prevAvg * 100);
   return out;
 }
+
+// ---- timer helpers ----
+
+export function elapsedMinutes(startedAtIso, nowMs) {
+  return Math.floor((nowMs - Date.parse(startedAtIso)) / 60000);
+}
+
+export function fmtElapsed(startedAtIso, nowMs) {
+  const sec = Math.max(0, Math.floor((nowMs - Date.parse(startedAtIso)) / 1000));
+  const h = Math.floor(sec / 3600);
+  const mm = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
+  const ss = String(sec % 60).padStart(2, '0');
+  return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
+}

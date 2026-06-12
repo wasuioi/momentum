@@ -4,6 +4,7 @@ import {
   WEIGHTS, DEFAULT_TARGETS, pillarPoints, dayPoints, dayScore, dayStatus,
   toDateStr, prevDate, addDays, startOfWeek, streak,
   balanceAlert, lifeTrend,
+  elapsedMinutes, fmtElapsed,
 } from '../score.js';
 
 const T = { ...DEFAULT_TARGETS }; // {skill:240, uni:120, health:60, fin:20, eng:30, mind:10}
@@ -134,4 +135,18 @@ test('lifeTrend: no data in previous window -> all null', () => {
   const t = lifeTrend(rows, '2026-06-12');
   assert.equal(t.pillars.skill, null);
   assert.equal(t.overall, null);
+});
+
+test('elapsedMinutes floors partial minutes', () => {
+  const start = '2026-06-12T10:00:00.000Z';
+  const now = Date.parse('2026-06-12T10:23:41.000Z');
+  assert.equal(elapsedMinutes(start, now), 23);
+  assert.equal(elapsedMinutes(start, Date.parse(start)), 0);
+});
+
+test('fmtElapsed renders MM:SS under an hour, H:MM:SS above', () => {
+  const start = '2026-06-12T10:00:00.000Z';
+  assert.equal(fmtElapsed(start, Date.parse('2026-06-12T10:23:41Z')), '23:41');
+  assert.equal(fmtElapsed(start, Date.parse('2026-06-12T11:02:09Z')), '1:02:09');
+  assert.equal(fmtElapsed(start, Date.parse('2026-06-12T10:00:05Z')), '00:05');
 });
