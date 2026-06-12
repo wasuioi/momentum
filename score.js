@@ -61,3 +61,50 @@ export function streak(scoreByDate, todayStr) {
   while ((scoreByDate[d] ?? 0) >= 40) { n++; d = prevDate(d); }
   return n;
 }
+
+// ---- balance alert (spec §7): pillar earning < 50% of its max for >= 5
+// consecutive days, counted back from yesterday. Missing days count as 0,
+// but never look back before the earliest recorded day. Worst pillar wins. ----
+
+export function balanceAlert(pointsByDate, yesterdayStr) {
+  const dates = Object.keys(pointsByDate);
+  if (dates.length === 0) return null;
+  const earliest = dates.sort()[0];
+  let worst = null;
+  for (const k of Object.keys(WEIGHTS)) {
+    let n = 0, d = yesterdayStr;
+    while (d >= earliest && n < 60) {
+      const p = pointsByDate[d]?.[k] ?? 0;
+      if (p >= WEIGHTS[k] / 2) break;
+      n++; d = prevDate(d);
+    }
+    if (n >= 5 && (!worst || n > worst.days)) worst = { pillar: k, days: n };
+  }
+  return worst;
+}
+
+// ---- life trend (spec §7): last 30 days vs previous 30, % change of summed
+// earned points per pillar; overall = % change of average daily score.
+// rowsByDate: { 'YYYY-MM-DD': { points, score } } ----
+
+export function lifeTrend(rowsByDate, todayStr) {
+  const dates = [];
+  let d = todayStr;
+  for (let i = 0; i < 60; i++) { dates.unshift(d); d = prevDate(d); }
+  const prevWin = dates.slice(0, 30), curWin = dates.slice(30);
+  const hasPrev = prevWin.some(x => rowsByDate[x]);
+
+  const out = { pillars: {}, overall: null };
+  for (const k of Object.keys(WEIGHTS)) {
+    const sum = win => win.reduce((a, x) => a + (rowsByDate[x]?.points?.[k] ?? 0), 0);
+    const prev = sum(prevWin);
+    out.pillars[k] = (!hasPrev || prev === 0) ? null : Math.round((sum(curWin) - prev) / prev * 100);
+  }
+  const avg = win => {
+    const rows = win.filter(x => rowsByDate[x]);
+    return rows.length ? rows.reduce((a, x) => a + rowsByDate[x].score, 0) / rows.length : 0;
+  };
+  const prevAvg = avg(prevWin);
+  out.overall = (!hasPrev || prevAvg === 0) ? null : Math.round((avg(curWin) - prevAvg) / prevAvg * 100);
+  return out;
+}

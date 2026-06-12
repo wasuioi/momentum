@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   WEIGHTS, DEFAULT_TARGETS, pillarPoints, dayPoints, dayScore, dayStatus,
   toDateStr, prevDate, addDays, startOfWeek, streak,
+  balanceAlert, lifeTrend,
 } from '../score.js';
 
 const T = { ...DEFAULT_TARGETS }; // {skill:240, uni:120, health:60, fin:20, eng:30, mind:10}
@@ -78,4 +79,59 @@ test('streak: red day or missing day breaks it', () => {
   assert.equal(streak({ '2026-06-12': 80, '2026-06-11': 20, '2026-06-10': 90 }, '2026-06-12'), 1);
   assert.equal(streak({ '2026-06-12': 80, '2026-06-10': 90 }, '2026-06-12'), 1);
   assert.equal(streak({}, '2026-06-12'), 0);
+});
+
+// helper: build {date: pointsObj} for n consecutive days ending at `end`
+function pointsRun(end, n, pointsObj) {
+  const out = {};
+  let d = end;
+  for (let i = 0; i < n; i++) { out[d] = pointsObj; d = prevDate(d); }
+  return out;
+}
+
+test('balanceAlert: fires at 5 consecutive below-50% days, not at 4', () => {
+  const good = { skill: 40, uni: 20, health: 20, fin: 5, eng: 5, mind: 5, refl: 5 };
+  const noEng = { ...good, eng: 1 }; // eng below 2.5 (50% of 5)
+  const four = { ...pointsRun('2026-06-11', 4, noEng), ...pointsRun('2026-06-07', 10, good) };
+  assert.equal(balanceAlert(four, '2026-06-11'), null);
+  const five = { ...pointsRun('2026-06-11', 5, noEng), ...pointsRun('2026-06-06', 10, good) };
+  assert.deepEqual(balanceAlert(five, '2026-06-11'), { pillar: 'eng', days: 5 });
+});
+
+test('balanceAlert: picks the pillar with the longest miss run', () => {
+  const good = { skill: 40, uni: 20, health: 20, fin: 5, eng: 5, mind: 5, refl: 5 };
+  const missEng = { ...good, eng: 0 };
+  const missBoth = { ...good, eng: 0, mind: 0 };
+  const rows = { ...pointsRun('2026-06-11', 6, missBoth), ...pointsRun('2026-06-05', 3, missEng), ...pointsRun('2026-06-02', 5, good) };
+  assert.deepEqual(balanceAlert(rows, '2026-06-11'), { pillar: 'eng', days: 9 });
+});
+
+test('balanceAlert: missing days count as 0 but never before first recorded day', () => {
+  const good = { skill: 40, uni: 20, health: 20, fin: 5, eng: 5, mind: 5, refl: 5 };
+  assert.equal(balanceAlert({}, '2026-06-11'), null); // brand-new user
+  // recorded 2026-06-10 only; 11th missing -> counts as 0, but run stops at earliest record
+  const rows = { '2026-06-10': good };
+  assert.equal(balanceAlert(rows, '2026-06-11'), null); // run length 1 < 5
+});
+
+test('lifeTrend: percent change of summed points, last 30 vs previous 30', () => {
+  const mk = pts => ({ points: pts, score: dayScore(pts) });
+  const rows = {};
+  // previous window (2026-04-14 .. 2026-05-13): skill 20/day
+  let d = '2026-05-13';
+  for (let i = 0; i < 30; i++) { rows[d] = mk({ skill: 20, uni: 0, health: 0, fin: 0, eng: 0, mind: 0, refl: 0 }); d = prevDate(d); }
+  // current window (2026-05-14 .. 2026-06-12): skill 30/day
+  d = '2026-06-12';
+  for (let i = 0; i < 30; i++) { rows[d] = mk({ skill: 30, uni: 0, health: 0, fin: 0, eng: 0, mind: 0, refl: 0 }); d = prevDate(d); }
+  const t = lifeTrend(rows, '2026-06-12');
+  assert.equal(t.pillars.skill, 50);   // (900-600)/600
+  assert.equal(t.pillars.uni, null);   // prev sum 0 -> no fake %
+  assert.equal(t.overall, 50);         // avg score 30 vs 20
+});
+
+test('lifeTrend: no data in previous window -> all null', () => {
+  const rows = { '2026-06-12': { points: { skill: 40 }, score: 40 } };
+  const t = lifeTrend(rows, '2026-06-12');
+  assert.equal(t.pillars.skill, null);
+  assert.equal(t.overall, null);
 });
