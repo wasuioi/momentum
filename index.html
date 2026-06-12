@@ -48,8 +48,15 @@
 <script>
   // module-graph failures (bad config.js URL, CDN down) happen before app.js runs —
   // surface them in the banner instead of a silent stuck "Loading…"
-  addEventListener('error', e => { if (e.message) showFatal(e.message); }, true);
-  addEventListener('unhandledrejection', e => showFatal(e.reason?.message || String(e.reason)));
+  // Cross-origin scripts (iOS share sheet, browser extensions) surface as a bare
+  // "Script error." with no file/line info — noise we can't act on, so skip it.
+  addEventListener('error', e => {
+    if (e.message && !(e.message === 'Script error.' && !e.filename)) showFatal(e.message);
+  }, true);
+  addEventListener('unhandledrejection', e => {
+    const msg = e.reason?.message || (e.reason ? String(e.reason) : '');
+    if (msg) showFatal(msg);
+  });
   function showFatal(msg) {
     document.getElementById('errmsg').textContent = msg;
     document.getElementById('err').classList.remove('hidden');
