@@ -5,6 +5,7 @@ import {
   toDateStr, prevDate, addDays, startOfWeek, streak,
   balanceAlert, lifeTrend,
   elapsedMinutes, fmtElapsed,
+  bestStreak,
 } from '../score.js';
 
 const T = { ...DEFAULT_TARGETS }; // {skill:240, uni:120, health:60, fin:20, eng:30, mind:10}
@@ -158,4 +159,12 @@ test('pillarPoints throws on unknown pillar key instead of returning NaN', () =>
 test('elapsedMinutes clamps clock skew to 0', () => {
   const start = '2026-06-12T10:00:00.000Z';
   assert.equal(elapsedMinutes(start, Date.parse('2026-06-12T09:59:00Z')), 0);
+});
+
+test('bestStreak finds the longest >=40 run anywhere in history', () => {
+  assert.equal(bestStreak({}), 0);
+  assert.equal(bestStreak({
+    '2026-06-01': 80, '2026-06-02': 45, '2026-06-03': 20, // run of 2
+    '2026-06-05': 80, '2026-06-06': 80, '2026-06-07': 80, // gap on 04, run of 3
+  }), 3);
 });

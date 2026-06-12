@@ -92,12 +92,138 @@ async function render() {
   } catch (e) { showError(e); throw e; }
 }
 
-// view stubs — replaced one by one in Tasks 11, 13, 14, 15
-async function renderToday() { $('#view').innerHTML = '<p class="loading">Today</p>'; }
+// view stubs — replaced one by one in Tasks 13, 14, 15
 async function renderWeek() { $('#view').innerHTML = '<p class="loading">Week</p>'; }
 async function renderMonth() { $('#view').innerHTML = '<p class="loading">Month</p>'; }
 async function renderSettings() { $('#view').innerHTML = '<p class="loading">Settings</p>'; }
 async function toggleTimer() {} // implemented in Task 12
+
+function chipBtn(pillarKey, id, label, on) {
+  return `<button class="chip ${on ? 'on' : ''}" data-action="tag" data-pillar="${pillarKey}" data-id="${id}">
+    <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>${label}</button>`;
+}
+
+function pillarCard(p, points) {
+  const max = S.WEIGHTS[p.key];
+  const t = targets[p.key];
+  const mins = day.minutes[p.key] || 0;
+  const running = !!(timer && timer.pillar === p.key);
+  const done = mins >= t;
+  const pct = Math.min(100, Math.round(mins / t * 100));
+  const chips = p.tags.map(([id, label]) => chipBtn(p.key, id, label, (day.tags[p.key] || []).includes(id))).join('')
+    + (p.key === 'health' ? `<button class="chip ${day.sleep_ok ? 'on' : ''}" data-action="sleep">
+        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Slept 7h+</button>` : '');
+  const sub = `${mins} / ${t} min${running ? ' · tracking…' : done ? ' · done ✦' : ''}`;
+  return `
+  <article class="pillar ${running ? 'running' : done ? 'done' : ''}" style="--c:var(--${p.key})">
+    <div class="p-head">
+      <div class="p-ic">${p.icon}</div>
+      <div class="p-t"><h3>${p.name}</h3><span>${sub}</span></div>
+      <div class="p-pts">${points[p.key]}<small> /${max}</small></div>
+    </div>
+    ${chips ? `<div class="chips">${chips}</div>` : ''}
+    <div class="min">
+      <button class="tbtn ${running ? 'stop' : ''}" data-action="timer" data-pillar="${p.key}">
+        ${running ? '<svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>'
+                  : '<svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>'}
+      </button>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      ${running
+        ? `<span class="mlabel"><span class="live"><i></i><span data-elapsed>00:00</span></span> · ${mins}/${t}</span>`
+        : `<button class="mlabel" data-action="editmin" data-pillar="${p.key}" title="Tap to edit minutes">${mins}/${t}</button>`}
+    </div>
+    <input class="note" data-note="${p.key}" placeholder="What did you do? (optional)" value="${esc(day.notes[p.key])}">
+  </article>`;
+}
+
+function daysLeftText(deadline) {
+  if (!deadline) return '';
+  const diff = Math.ceil((new Date(deadline + 'T00:00:00') - new Date(today + 'T00:00:00')) / 86400000);
+  return diff >= 0 ? ` · ${diff} days left` : ' · overdue';
+}
+
+function trackNowHtml() {
+  const p = PILLARS.find(x => x.key === timer.pillar);
+  return `<button class="tracknow" style="--c:var(--${p.key})" data-action="timer" data-pillar="${p.key}">
+    <span class="live"><i></i><span data-elapsed>00:00</span></span> ${p.icon} ${p.name} <em>· tap to stop</em>
+  </button>`;
+}
+
+function renderNavTimer() {
+  const el = $('#navtimer');
+  if (!timer) { el.innerHTML = ''; return; }
+  const p = PILLARS.find(x => x.key === timer.pillar);
+  el.innerHTML = `<button class="navtimer-card" style="--c:var(--${p.key})" data-action="timer" data-pillar="${p.key}">
+    <span class="live"><i></i><span data-elapsed>00:00</span></span>
+    <b>${p.icon} ${p.name}</b><span>TRACKING · CLICK TO STOP</span></button>`;
+}
+
+async function renderToday() {
+  const rows = await db.getDays(S.addDays(today, -60), S.prevDate(today));
+  const scoreByDate = {}, pointsByDate = {};
+  for (const r of rows) { scoreByDate[r.date] = r.score; pointsByDate[r.date] = r.data.points || {}; }
+
+  const points = S.dayPoints(day, targets);
+  const score = S.dayScore(points);
+  const status = S.dayStatus(score);
+  scoreByDate[today] = score;
+  const stk = S.streak(scoreByDate, today);
+  const best = S.bestStreak(scoreByDate);
+  const alert = S.balanceAlert(pointsByDate, S.prevDate(today));
+  const monthScores = rows.filter(r => r.date.slice(0, 7) === today.slice(0, 7)).map(r => r.score).concat(score);
+  const monthAvg = Math.round(monthScores.reduce((a, b) => a + b, 0) / monthScores.length);
+  const statusLabel = { green: 'Green Day', yellow: 'Yellow Day', red: 'Red Day' }[status];
+
+  const missionHtml = mission && mission.title ? `
+    <section class="mission">
+      <div class="m-top"><span class="m-label">🎯 CURRENT MISSION</span>
+        <span class="m-deadline">${esc(mission.deadline)}${daysLeftText(mission.deadline)}</span></div>
+      <h2>${esc(mission.title)}</h2>
+      <div class="m-bar"><i style="width:${mission.progress || 0}%"></i></div>
+      <div class="m-foot"><span>Progress</span><b>${mission.progress || 0}%</b></div>
+    </section>` : '';
+
+  $('#view').innerHTML = `
+    <div class="headrow">
+      <div><h1>Today</h1><p>${fmtLongDate(today)}</p></div>
+      <div class="streak">🔥 ${stk} <small>DAYS</small></div>
+    </div>
+    ${missionHtml}
+    <section class="hero">
+      <div class="ringwrap">
+        <div class="ring" style="--p:${score};--rc:var(--${status})"></div>
+        <div><div class="rn">${score}</div><div class="rs">/ 100</div></div>
+      </div>
+      <div class="hero-r">
+        <span class="pill ${status}"><i></i>${statusLabel}</span>
+        <span class="stat-line">Month average <b>${monthAvg}</b></span>
+        <span class="stat-line">Best streak <b>${best} days</b></span>
+      </div>
+    </section>
+    <section class="win">🏆
+      <div><label>BIGGEST WIN TODAY</label>
+        <input id="winput" placeholder="What are you most proud of today?" value="${esc(day.win)}"></div>
+    </section>
+    ${alert ? `<div class="alert">⚠️ ${pillarName(alert.pillar)} below target — ${alert.days} days in a row</div>` : ''}
+    <div class="pillars">
+      ${PILLARS.map(p => pillarCard(p, points)).join('')}
+      <article class="pillar refl" style="--c:var(--refl)">
+        <div class="p-head">
+          <div class="p-ic">🌱</div>
+          <div class="p-t"><h3>Reflection</h3><span>2 questions before bed</span></div>
+          <div class="p-pts">${points.refl}<small> /5</small></div>
+        </div>
+        <div class="refl-qs">
+          <div><label>What went wrong?</label>
+            <textarea data-reflect="wrong" rows="2">${esc(day.reflect.wrong)}</textarea></div>
+          <div><label>One thing for tomorrow?</label>
+            <textarea data-reflect="tomorrow" rows="2">${esc(day.reflect.tomorrow)}</textarea></div>
+        </div>
+      </article>
+    </div>
+    ${timer ? trackNowHtml() : ''}`;
+  renderNavTimer();
+}
 
 // ---- per-second tick: live clocks + midnight rollover ----
 function tick() {
@@ -108,5 +234,63 @@ function tick() {
     document.querySelectorAll('[data-elapsed]').forEach(el => { el.textContent = txt; });
   }
 }
+
+// ---- events (delegated on body: views are re-rendered, listeners are not) ----
+
+document.body.addEventListener('click', async ev => {
+  const btn = ev.target.closest('[data-action]');
+  if (!btn) return;
+  const a = btn.dataset.action;
+  try {
+    if (a === 'tag') {
+      const { pillar, id } = btn.dataset;
+      const arr = day.tags[pillar] || (day.tags[pillar] = []);
+      const i = arr.indexOf(id);
+      i >= 0 ? arr.splice(i, 1) : arr.push(id);
+      await saveToday(); await render();
+    } else if (a === 'sleep') {
+      day.sleep_ok = !day.sleep_ok;
+      await saveToday(); await render();
+    } else if (a === 'editmin') {
+      const p = btn.dataset.pillar;
+      const v = prompt(`Minutes for ${pillarName(p)} today:`, day.minutes[p] || 0);
+      if (v === null) return;
+      const n = parseInt(v, 10);
+      if (Number.isNaN(n) || n < 0) return;
+      day.minutes[p] = n;
+      await saveToday(); await render();
+    } else if (a === 'timer') {
+      await toggleTimer(btn.dataset.pillar);
+    } else if (a === 'weeknav') {
+      weekOffset += Number(btn.dataset.dir); await render();
+    } else if (a === 'monthnav') {
+      monthOffset += Number(btn.dataset.dir); await render();
+    } else if (a === 'export') {
+      const dump = await db.getAllForExport();
+      const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `momentum-backup-${today}.json`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } else if (a === 'logout') {
+      await db.signOut(); location.reload();
+    }
+  } catch (e) { showError(e); throw e; }
+});
+
+document.body.addEventListener('input', ev => {
+  const t = ev.target;
+  if (t.id === 'winput') { day.win = t.value; queueSave(); }
+  else if (t.dataset.note !== undefined) { day.notes[t.dataset.note] = t.value; queueSave(); }
+  else if (t.dataset.reflect !== undefined) { day.reflect[t.dataset.reflect] = t.value; queueSave(); }
+  else if (t.id === 'm-progress') { $('#m-pct').textContent = t.value + '%'; }
+});
+
+// after a text field loses focus, re-render so points/score refresh (not while typing)
+document.body.addEventListener('change', ev => {
+  const t = ev.target;
+  if (t.id === 'winput' || t.dataset.note !== undefined || t.dataset.reflect !== undefined) render();
+});
 
 boot();

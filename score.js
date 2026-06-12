@@ -123,3 +123,16 @@ export function fmtElapsed(startedAtIso, nowMs) {
   const ss = String(sec % 60).padStart(2, '0');
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
+
+export function bestStreak(scoreByDate) {
+  const dates = Object.keys(scoreByDate).sort();
+  let best = 0, run = 0, prev = null;
+  for (const d of dates) {
+    if (scoreByDate[d] >= 40) {
+      run = (prev !== null && prevDate(d) === prev) ? run + 1 : 1;
+      best = Math.max(best, run);
+      prev = d;
+    } else { run = 0; prev = null; }
+  }
+  return best;
+}
