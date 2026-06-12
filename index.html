@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Momentum</title>
+<meta name="theme-color" content="#0B0E13">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- login overlay (hidden once a session exists) -->
+<div id="login" class="login hidden">
+  <form id="loginform" class="login-card">
+    <div class="logo"><i>M</i><b>Momentum</b></div>
+    <input id="email" type="email" placeholder="Email" autocomplete="username" required>
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" required>
+    <button type="submit">Sign in</button>
+    <p id="loginerr" class="login-err"></p>
+  </form>
+</div>
+
+<!-- desktop sidebar / mobile bottom tabs: same links, CSS decides layout -->
+<nav id="nav">
+  <div class="logo nav-logo"><i>M</i><b>Momentum</b></div>
+  <a href="#today"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Today</a>
+  <a href="#week"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Week</a>
+  <a href="#month"><svg viewBox="0 0 24 24"><path d="M4 19V10M10 19V5M16 19v-7M21 19H3"/></svg>Month</a>
+  <a href="#settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</a>
+  <div id="navtimer"></div>
+</nav>
+
+<main id="view"><p class="loading">Loading…</p></main>
+
+<!-- save-error banner: visible failure + retry, errors are never swallowed -->
+<div id="err" class="errbar hidden">
+  <span>⚠️ Save failed: <b id="errmsg"></b></span>
+  <button id="retry">Retry</button>
+</div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
