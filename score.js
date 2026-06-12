@@ -72,7 +72,7 @@ export function balanceAlert(pointsByDate, yesterdayStr) {
   if (dates.length === 0) return null;
   const earliest = dates.sort()[0];
   let worst = null;
-  for (const k of Object.keys(WEIGHTS)) {
+  for (const k of Object.keys(WEIGHTS)) { // includes refl: skipping reflection 5 days also deserves a nudge
     let n = 0, d = yesterdayStr;
     while (d >= earliest && n < 60) { // cap lookback so sparse data can't loop forever
       const p = pointsByDate[d]?.[k] ?? 0;

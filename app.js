@@ -48,6 +48,7 @@ $('#retry').addEventListener('click', () => { if (lastFailed) lastFailed(); });
 
 // ---- saving today's row ----
 let saveDebounce = null;
+// saveToday reads module-level `today`/`day`; tick() clears this debounce on rollover on purpose
 function queueSave() { clearTimeout(saveDebounce); saveDebounce = setTimeout(saveToday, 800); }
 async function saveToday() {
   day.points = S.dayPoints(day, targets);
@@ -293,12 +294,17 @@ async function renderSettings() {
     ${timer ? trackNowHtml() : ''}`;
   renderNavTimer();
 }
+let timerBusy = false;
 async function toggleTimer(pillar) {
-  if (timer && timer.pillar === pillar) { await stopTimer(); await render(); return; }
-  if (timer) await stopTimer(); // switching pillars: bank the old one first
-  timer = { pillar, started_at: new Date().toISOString() };
-  await db.setState('timer', timer);
-  await render();
+  if (timerBusy) return;
+  timerBusy = true;
+  try {
+    if (timer && timer.pillar === pillar) { await stopTimer(); await render(); return; }
+    if (timer) await stopTimer(); // switching pillars: bank the old one first
+    timer = { pillar, started_at: new Date().toISOString() };
+    await db.setState('timer', timer);
+    await render();
+  } finally { timerBusy = false; }
 }
 
 async function stopTimer() {
@@ -313,13 +319,15 @@ async function stopTimer() {
     await saveToday();
   } else {
     // timer crossed midnight: credit the day it was started (spec §4)
-    try {
+    const saveMidnight = async () => {
       const row = await db.getDay(startDate);
       const d = row ? { ...emptyDay(), ...row.data } : emptyDay();
       d.minutes[t.pillar] = (d.minutes[t.pillar] || 0) + mins;
       d.points = S.dayPoints(d, targets);
       await db.saveDay(startDate, d, S.dayScore(d.points));
-    } catch (e) { showError(e); throw e; }
+    };
+    try { await saveMidnight(); }
+    catch (e) { lastFailed = saveMidnight; showError(e); throw e; }
   }
 }
 
@@ -453,7 +461,12 @@ async function renderToday() {
 // ---- per-second tick: live clocks + midnight rollover ----
 function tick() {
   const now = S.toDateStr(new Date());
-  if (now !== today) { today = now; loadToday().then(render); return; }
+  if (now !== today) {
+    clearTimeout(saveDebounce); // a pending save must not fire into the new day's row
+    today = now;
+    loadToday().then(render).catch(e => { showError(e); console.error(e); });
+    return;
+  }
   if (timer) {
     const txt = S.fmtElapsed(timer.started_at, Date.now());
     document.querySelectorAll('[data-elapsed]').forEach(el => { el.textContent = txt; });
@@ -535,4 +548,4 @@ document.body.addEventListener('change', async ev => {
   } catch (e) { showError(e); throw e; }
 });
 
-boot();
+boot().catch(e => { showError(e); console.error('boot failed', e); });
