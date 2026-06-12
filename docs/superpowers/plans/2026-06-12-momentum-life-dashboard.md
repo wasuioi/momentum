@@ -137,7 +137,7 @@ test('dayStatus thresholds', () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `node --test tests/`
+Run: `npm test`
 Expected: FAIL — `Cannot find module ... score.js`
 
 - [ ] **Step 3: Write the implementation**
@@ -181,7 +181,7 @@ export function dayStatus(score) {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --test tests/`
+Run: `npm test`
 Expected: all PASS
 
 - [ ] **Step 5: Commit**
@@ -232,7 +232,7 @@ test('streak: red day or missing day breaks it', () => {
 
 - [ ] **Step 2: Run tests to verify the new ones fail**
 
-Run: `node --test tests/`
+Run: `npm test`
 Expected: new tests FAIL (`toDateStr is not a function` style errors), old tests PASS
 
 - [ ] **Step 3: Append implementation to `score.js`**
@@ -272,7 +272,7 @@ export function streak(scoreByDate, todayStr) {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --test tests/`
+Run: `npm test`
 Expected: all PASS
 
 - [ ] **Step 5: Commit**
@@ -353,7 +353,7 @@ test('lifeTrend: no data in previous window -> all null', () => {
 
 - [ ] **Step 2: Run tests to verify the new ones fail**
 
-Run: `node --test tests/`
+Run: `npm test`
 Expected: new tests FAIL, old tests PASS
 
 - [ ] **Step 3: Append implementation to `score.js`**
@@ -409,7 +409,7 @@ export function lifeTrend(rowsByDate, todayStr) {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --test tests/`
+Run: `npm test`
 Expected: all PASS
 
 - [ ] **Step 5: Commit**
@@ -449,7 +449,7 @@ test('fmtElapsed renders MM:SS under an hour, H:MM:SS above', () => {
 
 - [ ] **Step 2: Run tests to verify the new ones fail**
 
-Run: `node --test tests/`
+Run: `npm test`
 Expected: new tests FAIL, old tests PASS
 
 - [ ] **Step 3: Append implementation to `score.js`**
@@ -472,7 +472,7 @@ export function fmtElapsed(startedAtIso, nowMs) {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `node --test tests/`
+Run: `npm test`
 Expected: all PASS
 
 - [ ] **Step 5: Commit**
@@ -1153,7 +1153,7 @@ test('bestStreak finds the longest >=40 run anywhere in history', () => {
 });
 ```
 
-Run: `node --test tests/` — expected: new test FAILS.
+Run: `npm test` — expected: new test FAILS.
 
 - [ ] **Step 2: Append implementation to `score.js`**
 
@@ -1172,7 +1172,7 @@ export function bestStreak(scoreByDate) {
 }
 ```
 
-Run: `node --test tests/` — expected: all PASS.
+Run: `npm test` — expected: all PASS.
 
 - [ ] **Step 3: Replace the `renderToday` stub in `app.js`** with the real view + card builders:
 
@@ -1727,7 +1727,7 @@ document.body.addEventListener('change', async ev => {
 
 - [ ] **Step 4: Run full test suite once more**
 
-Run: `node --test tests/`
+Run: `npm test`
 Expected: all PASS
 
 - [ ] **Step 5: Commit**
@@ -1775,7 +1775,7 @@ If `gh` is not installed/authenticated: create an empty public repo named `momen
 
 ## Final Integration
 
-Per `superpowers:finishing-a-development-branch`: when all tasks pass, merge the worktree branch back to `main`, run `node --test tests/` once more on `main`, push, and confirm GitHub Pages redeployed (it auto-builds on push).
+Per `superpowers:finishing-a-development-branch`: when all tasks pass, merge the worktree branch back to `main`, run `npm test` once more on `main`, push, and confirm GitHub Pages redeployed (it auto-builds on push).
 
 ---
 

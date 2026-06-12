@@ -150,3 +150,12 @@ test('fmtElapsed renders MM:SS under an hour, H:MM:SS above', () => {
   assert.equal(fmtElapsed(start, Date.parse('2026-06-12T11:02:09Z')), '1:02:09');
   assert.equal(fmtElapsed(start, Date.parse('2026-06-12T10:00:05Z')), '00:05');
 });
+
+test('pillarPoints throws on unknown pillar key instead of returning NaN', () => {
+  assert.throws(() => pillarPoints('typo', { minutes: {} }, T), /unknown key/);
+});
+
+test('elapsedMinutes clamps clock skew to 0', () => {
+  const start = '2026-06-12T10:00:00.000Z';
+  assert.equal(elapsedMinutes(start, Date.parse('2026-06-12T09:59:00Z')), 0);
+});

@@ -12,6 +12,7 @@ export function pillarPoints(key, data, targets) {
     return Math.round(WEIGHTS.refl * n / 3);
   }
   const target = targets[key];
+  if (target == null) throw new Error(`pillarPoints: unknown key "${key}"`);
   const mins = Math.min(data.minutes?.[key] ?? 0, target);
   if (key === 'health') return Math.round(15 * mins / target) + (data.sleep_ok ? 5 : 0);
   return Math.round(WEIGHTS[key] * mins / target);
@@ -73,7 +74,7 @@ export function balanceAlert(pointsByDate, yesterdayStr) {
   let worst = null;
   for (const k of Object.keys(WEIGHTS)) {
     let n = 0, d = yesterdayStr;
-    while (d >= earliest && n < 60) {
+    while (d >= earliest && n < 60) { // cap lookback so sparse data can't loop forever
       const p = pointsByDate[d]?.[k] ?? 0;
       if (p >= WEIGHTS[k] / 2) break;
       n++; d = prevDate(d);
@@ -112,7 +113,7 @@ export function lifeTrend(rowsByDate, todayStr) {
 // ---- timer helpers ----
 
 export function elapsedMinutes(startedAtIso, nowMs) {
-  return Math.floor((nowMs - Date.parse(startedAtIso)) / 60000);
+  return Math.max(0, Math.floor((nowMs - Date.parse(startedAtIso)) / 60000));
 }
 
 export function fmtElapsed(startedAtIso, nowMs) {
