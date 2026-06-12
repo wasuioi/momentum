@@ -44,7 +44,10 @@ function fmtLongDate(dateStr) {
 let lastFailed = null;
 function showError(e) { $('#errmsg').textContent = e.message || String(e); $('#err').classList.remove('hidden'); console.error(e); }
 function hideError() { $('#err').classList.add('hidden'); }
-$('#retry').addEventListener('click', () => { if (lastFailed) lastFailed(); });
+$('#retry').addEventListener('click', async () => {
+  if (!lastFailed) return;
+  try { await lastFailed(); hideError(); } catch (e) { showError(e); }
+});
 
 // ---- saving today's row ----
 let saveDebounce = null;
@@ -102,7 +105,7 @@ function rangeLabel(from, to) {
 async function renderWeek() {
   const monday = S.startOfWeek(S.addDays(today, weekOffset * 7));
   const dates = Array.from({ length: 7 }, (_, i) => S.addDays(monday, i));
-  const rows = await db.getDays(S.addDays(monday, -60), dates[6]);
+  const rows = await db.getDays(S.addDays(monday, -60), dates[6] > today ? dates[6] : today);
   const byDate = {}; for (const r of rows) byDate[r.date] = r;
   const names = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
 
@@ -186,7 +189,7 @@ async function renderMonth() {
   for (const r of rows) trendRows[r.date] = { points: r.data.points || {}, score: r.score };
   const trend = S.lifeTrend(trendRows, today);
   const tRow = (label, v, big = false) => {
-    const cls = v === null ? 'flat' : v >= 0 ? 'up' : 'down';
+    const cls = v === null ? 'flat' : v > 0 ? 'up' : v < 0 ? 'down' : 'flat';
     const txt = v === null ? '—' : `${v >= 0 ? '▲ +' : '▼ −'}${Math.abs(v)}%`;
     return `<div class="t-row ${big ? 'big' : ''}"><span>${label}</span><b class="${cls}">${txt}</b></div>`;
   };
@@ -310,6 +313,9 @@ async function toggleTimer(pillar) {
 async function stopTimer() {
   if (!timer) return;
   const t = timer; timer = null;
+  // another device may have already stopped/replaced this timer — verify before banking
+  const dbTimer = await db.getState('timer', null);
+  if (!dbTimer || dbTimer.started_at !== t.started_at || dbTimer.pillar !== t.pillar) return;
   await db.setState('timer', null);
   const mins = S.elapsedMinutes(t.started_at, Date.now());
   if (mins <= 0) return; // under a minute: nothing to bank

@@ -41,10 +41,20 @@
 
 <!-- save-error banner: visible failure + retry, errors are never swallowed -->
 <div id="err" class="errbar hidden">
-  <span>⚠️ Save failed: <b id="errmsg"></b></span>
+  <span>⚠️ Something failed: <b id="errmsg"></b></span>
   <button id="retry">Retry</button>
 </div>
 
+<script>
+  // module-graph failures (bad config.js URL, CDN down) happen before app.js runs —
+  // surface them in the banner instead of a silent stuck "Loading…"
+  addEventListener('error', e => { if (e.message) showFatal(e.message); }, true);
+  addEventListener('unhandledrejection', e => showFatal(e.reason?.message || String(e.reason)));
+  function showFatal(msg) {
+    document.getElementById('errmsg').textContent = msg;
+    document.getElementById('err').classList.remove('hidden');
+  }
+</script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

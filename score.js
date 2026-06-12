@@ -14,7 +14,7 @@ export function pillarPoints(key, data, targets) {
   const target = targets[key];
   if (target == null) throw new Error(`pillarPoints: unknown key "${key}"`);
   const mins = Math.min(data.minutes?.[key] ?? 0, target);
-  if (key === 'health') return Math.round(15 * mins / target) + (data.sleep_ok ? 5 : 0);
+  if (key === 'health') return Math.round(15 * mins / target) + (data.sleep_ok ? 5 : 0); // 20 max = 15 workout + 5 sleep
   return Math.round(WEIGHTS[key] * mins / target);
 }
 
