@@ -96,7 +96,35 @@ async function render() {
 async function renderWeek() { $('#view').innerHTML = '<p class="loading">Week</p>'; }
 async function renderMonth() { $('#view').innerHTML = '<p class="loading">Month</p>'; }
 async function renderSettings() { $('#view').innerHTML = '<p class="loading">Settings</p>'; }
-async function toggleTimer() {} // implemented in Task 12
+async function toggleTimer(pillar) {
+  if (timer && timer.pillar === pillar) { await stopTimer(); await render(); return; }
+  if (timer) await stopTimer(); // switching pillars: bank the old one first
+  timer = { pillar, started_at: new Date().toISOString() };
+  await db.setState('timer', timer);
+  await render();
+}
+
+async function stopTimer() {
+  if (!timer) return;
+  const t = timer; timer = null;
+  await db.setState('timer', null);
+  const mins = S.elapsedMinutes(t.started_at, Date.now());
+  if (mins <= 0) return; // under a minute: nothing to bank
+  const startDate = S.toDateStr(new Date(Date.parse(t.started_at)));
+  if (startDate === today) {
+    day.minutes[t.pillar] = (day.minutes[t.pillar] || 0) + mins;
+    await saveToday();
+  } else {
+    // timer crossed midnight: credit the day it was started (spec §4)
+    try {
+      const row = await db.getDay(startDate);
+      const d = row ? { ...emptyDay(), ...row.data } : emptyDay();
+      d.minutes[t.pillar] = (d.minutes[t.pillar] || 0) + mins;
+      d.points = S.dayPoints(d, targets);
+      await db.saveDay(startDate, d, S.dayScore(d.points));
+    } catch (e) { showError(e); throw e; }
+  }
+}
 
 function chipBtn(pillarKey, id, label, on) {
   return `<button class="chip ${on ? 'on' : ''}" data-action="tag" data-pillar="${pillarKey}" data-id="${id}">
