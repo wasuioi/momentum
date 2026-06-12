@@ -86,7 +86,7 @@ create table days (
 -- ค่าระบบ: timer, targets, mission (หนึ่ง key = หนึ่งแถว)
 create table app_state (
   key text primary key,                -- 'timer' | 'targets' | 'mission'
-  value jsonb not null
+  value jsonb                          -- nullable: timer key stores null when no timer runs
 );
 ```
 

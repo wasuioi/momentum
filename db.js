@@ -1,7 +1,7 @@
 // Supabase access layer. Every function throws on error — callers decide
 // how to surface it (error banner). Never swallow.
 
-import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.1/+esm';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from './config.js';
 
 export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
