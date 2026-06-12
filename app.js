@@ -268,7 +268,31 @@ async function renderMonth() {
   renderNavTimer();
 }
 
-async function renderSettings() { $('#view').innerHTML = '<p class="loading">Settings</p>'; }
+async function renderSettings() {
+  const tRows = PILLARS.map(p => `
+    <div class="set-row"><label>${p.icon} ${p.name} target (min/day)</label>
+      <input type="number" min="1" data-target="${p.key}" value="${targets[p.key]}"></div>`).join('');
+  const m = mission || { title: '', deadline: '', progress: 0 };
+  $('#view').innerHTML = `
+    <div class="headrow"><div><h1>Settings</h1><p>Targets, mission, account</p></div></div>
+    <section class="card"><h2>Daily targets</h2>${tRows}</section>
+    <section class="card"><h2>Current mission</h2>
+      <div class="set-row"><label>Title</label>
+        <input type="text" id="m-title" value="${esc(m.title)}" placeholder="e.g. Launch TrueVibe MVP"></div>
+      <div class="set-row"><label>Deadline</label>
+        <input type="date" id="m-deadline" value="${esc(m.deadline)}"></div>
+      <div class="set-row"><label>Progress <b id="m-pct">${m.progress || 0}%</b></label>
+        <input type="range" id="m-progress" min="0" max="100" value="${m.progress || 0}"></div>
+    </section>
+    <section class="card"><h2>Data & account</h2>
+      <div class="btnrow">
+        <button class="btn" data-action="export">⬇ Export JSON backup</button>
+        <button class="btn danger" data-action="logout">Log out</button>
+      </div>
+    </section>
+    ${timer ? trackNowHtml() : ''}`;
+  renderNavTimer();
+}
 async function toggleTimer(pillar) {
   if (timer && timer.pillar === pillar) { await stopTimer(); await render(); return; }
   if (timer) await stopTimer(); // switching pillars: bank the old one first
@@ -489,9 +513,26 @@ document.body.addEventListener('input', ev => {
 });
 
 // after a text field loses focus, re-render so points/score refresh (not while typing)
-document.body.addEventListener('change', ev => {
+document.body.addEventListener('change', async ev => {
   const t = ev.target;
-  if (t.id === 'winput' || t.dataset.note !== undefined || t.dataset.reflect !== undefined) render();
+  try {
+    if (t.id === 'winput' || t.dataset.note !== undefined || t.dataset.reflect !== undefined) {
+      await render();
+    } else if (t.dataset.target !== undefined) {
+      const n = parseInt(t.value, 10);
+      if (Number.isNaN(n) || n < 1) { t.value = targets[t.dataset.target]; return; }
+      targets[t.dataset.target] = n;
+      await db.setState('targets', targets);
+      await saveToday(); // re-score today against the new target
+    } else if (['m-title', 'm-deadline', 'm-progress'].includes(t.id)) {
+      mission = {
+        title: $('#m-title').value.trim(),
+        deadline: $('#m-deadline').value,
+        progress: Number($('#m-progress').value),
+      };
+      await db.setState('mission', mission);
+    }
+  } catch (e) { showError(e); throw e; }
 });
 
 boot();
