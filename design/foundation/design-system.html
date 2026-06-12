@@ -1,0 +1,207 @@
+<!-- @dsCard group="Foundation" name="Colors, Type & Components" subtitle="Palette, pillar colors, chips, bars, score ring" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Momentum — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E13; --surface:#141A23; --surface2:#1B2330; --line:rgba(255,255,255,.07);
+    --text:#EAF0F7; --muted:#93A0B4; --faint:#5C6A7E;
+    --skill:#F5B83D; --uni:#5BA8FF; --health:#3DDC84; --fin:#B98CF5; --eng:#FF8A8A; --spirit:#8E9BFF; --refl:#34D3C3;
+    --red:#F8615A; --yellow:#F2C94C; --green:#3DDC84;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:Inter,system-ui,sans-serif;padding:40px;max-width:960px}
+  h2{font-family:Sora,Inter,sans-serif;font-size:14px;text-transform:uppercase;letter-spacing:.12em;color:var(--faint);margin:36px 0 16px}
+  h2:first-child{margin-top:0}
+  .row{display:flex;flex-wrap:wrap;gap:12px;align-items:center}
+  /* swatches */
+  .sw{width:118px;border-radius:14px;border:1px solid var(--line);overflow:hidden}
+  .sw i{display:block;height:64px}
+  .sw b{display:block;font-size:11px;font-weight:600;padding:8px 10px 2px}
+  .sw span{display:block;font-size:10px;color:var(--muted);padding:0 10px 9px;font-family:ui-monospace,monospace}
+  /* type */
+  .t-display{font-family:Sora,sans-serif;font-size:44px;font-weight:800;letter-spacing:-.02em}
+  .t-h1{font-family:Sora,sans-serif;font-size:22px;font-weight:700}
+  .t-h3{font-size:15px;font-weight:600}
+  .t-body{font-size:14px;color:var(--muted)}
+  .t-cap{font-size:12px;color:var(--faint);font-weight:500}
+  .tline{display:flex;align-items:baseline;gap:18px;padding:7px 0;border-bottom:1px dashed var(--line)}
+  .tline em{font-style:normal;font-size:11px;color:var(--faint);width:170px;font-family:ui-monospace,monospace}
+  /* pills */
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 12px;border-radius:99px}
+  .pill i{width:7px;height:7px;border-radius:50%}
+  .pill.g{background:rgba(61,220,132,.13);color:var(--green)} .pill.g i{background:var(--green)}
+  .pill.y{background:rgba(242,201,76,.13);color:var(--yellow)} .pill.y i{background:var(--yellow)}
+  .pill.r{background:rgba(248,97,90,.13);color:var(--red)} .pill.r i{background:var(--red)}
+  /* chips */
+  .chip{display:inline-flex;align-items:center;gap:7px;font-size:13px;font-weight:500;color:var(--muted);
+    padding:9px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface2)}
+  .chip svg{width:13px;height:13px;stroke:var(--faint);stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .chip.on{color:var(--text);border-color:transparent;background:color-mix(in srgb,var(--c) 16%,transparent)}
+  .chip.on svg{stroke:var(--c)}
+  .quick{display:inline-flex;gap:6px}
+  .quick b{font-size:12px;font-weight:700;color:var(--text);background:var(--surface2);border:1px solid var(--line);
+    border-radius:9px;padding:6px 11px}
+  /* timer */
+  .tbtn{width:34px;height:34px;border-radius:50%;flex:none;display:grid;place-items:center;border:none;
+    background:color-mix(in srgb,var(--c) 14%,transparent)}
+  .tbtn svg{width:13px;height:13px;fill:var(--c)}
+  .tbtn.stop{background:var(--c)}
+  .tbtn.stop svg{fill:#0B0E13}
+  .live{display:inline-flex;align-items:center;gap:6px;font-family:Sora,sans-serif;font-weight:700;color:var(--c);
+    font-size:13px;font-variant-numeric:tabular-nums}
+  .live i{width:7px;height:7px;border-radius:50%;background:var(--c);animation:pulse 1.2s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  /* progress */
+  .bar{height:6px;border-radius:99px;background:var(--surface2);overflow:hidden;width:300px}
+  .bar i{display:block;height:100%;border-radius:99px;background:var(--c)}
+  /* ring */
+  .ring{position:relative;width:var(--s);aspect-ratio:1;border-radius:50%;
+    background:conic-gradient(var(--rc) calc(var(--p)*1%),#222B38 0);
+    -webkit-mask:radial-gradient(farthest-side,#0000 calc(100% - var(--w)),#000 calc(100% - var(--w) + 1px));
+    mask:radial-gradient(farthest-side,#0000 calc(100% - var(--w)),#000 calc(100% - var(--w) + 1px))}
+  .ringwrap{position:relative;display:grid;place-items:center}
+  .ringwrap>div:last-child{position:absolute;text-align:center}
+  .rn{font-family:Sora,sans-serif;font-weight:800;letter-spacing:-.02em}
+  .rs{font-size:11px;color:var(--faint);font-weight:600}
+  /* pillar card */
+  .pillar{width:330px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px}
+  .p-head{display:flex;align-items:center;gap:11px;margin-bottom:12px}
+  .p-ic{width:38px;height:38px;border-radius:12px;display:grid;place-items:center;font-size:18px;
+    background:color-mix(in srgb,var(--c) 14%,transparent)}
+  .p-t h3{font-size:15px;font-weight:600}
+  .p-t span{font-size:12px;color:var(--faint)}
+  .p-pts{margin-left:auto;font-family:Sora,sans-serif;font-weight:700;font-size:15px;color:var(--c)}
+  .p-pts small{color:var(--faint);font-weight:600;font-size:11px}
+  .chips{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:13px}
+  .min{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:10px}
+  .min span{font-size:12px;color:var(--muted);font-weight:500;white-space:nowrap}
+  .pillar .bar{width:100%;margin-top:11px}
+  /* note field — one line, optional */
+  .note{background:var(--surface2);border:1px solid var(--line);border-radius:11px;
+    padding:9px 12px;font-size:12.5px;color:var(--text);width:330px}
+  .note.empty{color:var(--faint)}
+</style>
+</head>
+<body>
+
+<h2>Palette</h2>
+<div class="row">
+  <div class="sw"><i style="background:#0B0E13"></i><b>Background</b><span>#0B0E13</span></div>
+  <div class="sw"><i style="background:#141A23"></i><b>Surface</b><span>#141A23</span></div>
+  <div class="sw"><i style="background:#1B2330"></i><b>Surface 2</b><span>#1B2330</span></div>
+  <div class="sw"><i style="background:#EAF0F7"></i><b>Text</b><span>#EAF0F7</span></div>
+  <div class="sw"><i style="background:#93A0B4"></i><b>Muted</b><span>#93A0B4</span></div>
+</div>
+<div class="row" style="margin-top:12px">
+  <div class="sw"><i style="background:var(--skill)"></i><b>💰 Skill &amp; Income</b><span>#F5B83D</span></div>
+  <div class="sw"><i style="background:var(--uni)"></i><b>🎓 University</b><span>#5BA8FF</span></div>
+  <div class="sw"><i style="background:var(--health)"></i><b>💪 Health</b><span>#3DDC84</span></div>
+  <div class="sw"><i style="background:var(--fin)"></i><b>📚 Finance</b><span>#B98CF5</span></div>
+  <div class="sw"><i style="background:var(--eng)"></i><b>🇬🇧 English</b><span>#FF8A8A</span></div>
+  <div class="sw"><i style="background:var(--spirit)"></i><b>🧘 Mindfulness</b><span>#8E9BFF</span></div>
+  <div class="sw"><i style="background:var(--refl)"></i><b>🌱 Reflection</b><span>#34D3C3</span></div>
+</div>
+
+<h2>Day status</h2>
+<div class="row">
+  <span class="pill g"><i></i>Green Day · 80+</span>
+  <span class="pill y"><i></i>Yellow Day · 40–79</span>
+  <span class="pill r"><i></i>Red Day · &lt;40</span>
+</div>
+
+<h2>Typography — Inter + Sora</h2>
+<div class="tline"><em>Display · Sora 44/800</em><span class="t-display">83</span></div>
+<div class="tline"><em>H1 · Sora 22/700</em><span class="t-h1">Today</span></div>
+<div class="tline"><em>H3 · Inter 15/600</em><span class="t-h3">Skill &amp; Income</span></div>
+<div class="tline"><em>Body · Inter 14/400</em><span class="t-body">Did I move my life forward today?</span></div>
+<div class="tline"><em>Caption · Inter 12/500</em><span class="t-cap">160 / 180 MIN</span></div>
+
+<h2>Score rings</h2>
+<div class="row" style="gap:28px">
+  <div class="ringwrap"><div class="ring" style="--s:132px;--w:11px;--p:83;--rc:var(--green)"></div>
+    <div><div class="rn" style="font-size:38px">83</div><div class="rs">/ 100</div></div></div>
+  <div class="ringwrap"><div class="ring" style="--s:92px;--w:9px;--p:62;--rc:var(--yellow)"></div>
+    <div><div class="rn" style="font-size:26px">62</div><div class="rs">/ 100</div></div></div>
+  <div class="ringwrap"><div class="ring" style="--s:64px;--w:7px;--p:28;--rc:var(--red)"></div>
+    <div><div class="rn" style="font-size:18px">28</div></div></div>
+</div>
+
+<h2>Checklist chips — tap to toggle</h2>
+<div class="row" style="--c:var(--skill)">
+  <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Write code</span>
+  <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Write code</span>
+</div>
+
+<h2>Timer — press play, time tracks itself (one pillar at a time)</h2>
+<div class="row" style="--c:var(--skill);align-items:center">
+  <button class="tbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+  <span style="font-size:12px;color:var(--faint)">idle — tap to start</span>
+  <button class="tbtn stop" style="margin-left:22px"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+  <span class="live"><i></i>23:41</span>
+  <span style="font-size:12px;color:var(--faint)">running — tap to stop, minutes land in the pillar. Forgot to track? Tap the minutes label to edit.</span>
+</div>
+
+<h2>Note field — "what did you do?" (optional, one per pillar)</h2>
+<div class="row">
+  <span class="note">Built OAuth login for client project</span>
+  <span class="note empty">What did you do? (optional)</span>
+</div>
+
+<h2>Pillar card — three states</h2>
+<div class="row" style="align-items:flex-start">
+
+  <article class="pillar" style="--c:var(--uni)">
+    <div class="p-head">
+      <div class="p-ic">🎓</div>
+      <div class="p-t"><h3>University</h3><span>0 / 120 min</span></div>
+      <div class="p-pts" style="color:var(--faint)">0<small> /20</small></div>
+    </div>
+    <div class="chips">
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Attend class</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Review notes</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Homework</span>
+    </div>
+    <div class="min"><button class="tbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+      <div class="bar" style="flex:1"><i style="width:0%"></i></div></div>
+  </article>
+
+  <article class="pillar" style="--c:var(--uni)">
+    <div class="p-head">
+      <div class="p-ic">🎓</div>
+      <div class="p-t"><h3>University</h3><span>60 / 120 min</span></div>
+      <div class="p-pts">10<small> /20</small></div>
+    </div>
+    <div class="chips">
+      <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Attend class</span>
+      <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Review notes</span>
+      <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Homework</span>
+    </div>
+    <div class="min"><button class="tbtn stop"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+      <div class="bar" style="flex:1"><i style="width:50%"></i></div><span class="live"><i></i>23:41</span></div>
+  </article>
+
+  <article class="pillar" style="--c:var(--uni);outline:1px solid color-mix(in srgb,var(--uni) 35%,transparent)">
+    <div class="p-head">
+      <div class="p-ic">🎓</div>
+      <div class="p-t"><h3>University</h3><span>120 / 120 min · done ✦</span></div>
+      <div class="p-pts">20<small> /20</small></div>
+    </div>
+    <div class="chips">
+      <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Attend class</span>
+      <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Review notes</span>
+      <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Homework</span>
+    </div>
+    <div class="min"><button class="tbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+      <div class="bar" style="flex:1"><i style="width:100%"></i></div></div>
+  </article>
+
+</div>
+
+</body>
+</html>

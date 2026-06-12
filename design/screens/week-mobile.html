@@ -1,0 +1,104 @@
+<!-- @dsCard group="Screens" name="Week — Mobile" subtitle="Weekly review: day dots, hours per pillar" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Momentum — Week</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E13; --surface:#141A23; --surface2:#1B2330; --line:rgba(255,255,255,.07);
+    --text:#EAF0F7; --muted:#93A0B4; --faint:#5C6A7E;
+    --skill:#F5B83D; --uni:#5BA8FF; --health:#3DDC84; --fin:#B98CF5; --eng:#FF8A8A; --spirit:#8E9BFF; --refl:#34D3C3;
+    --red:#F8615A; --yellow:#F2C94C; --green:#3DDC84;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#06080C;display:grid;place-items:start center;padding:24px;font-family:Inter,system-ui,sans-serif;color:var(--text)}
+  .phone{width:390px;background:var(--bg);border-radius:34px;border:1px solid var(--line);overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.55)}
+  .scroll{padding:22px 18px 96px}
+  header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;padding:0 2px}
+  header h1{font-family:Sora,sans-serif;font-size:22px;font-weight:700}
+  header p{font-size:12.5px;color:var(--faint);font-weight:500;margin-top:2px}
+  .nav-week{display:flex;gap:8px}
+  .nav-week b{width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:var(--surface);
+    border:1px solid var(--line);color:var(--muted);font-weight:600}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:17px;margin-bottom:12px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:600;margin-bottom:14px}
+  /* day dots */
+  .days{display:flex;justify-content:space-between}
+  .day{display:flex;flex-direction:column;align-items:center;gap:8px}
+  .day em{font-style:normal;font-size:10.5px;font-weight:600;color:var(--faint);letter-spacing:.04em}
+  .dot{width:34px;height:34px;border-radius:12px;display:grid;place-items:center;
+    font-family:Sora,sans-serif;font-size:12px;font-weight:700}
+  .dot.g{background:rgba(61,220,132,.16);color:var(--green)}
+  .dot.y{background:rgba(242,201,76,.14);color:var(--yellow)}
+  .dot.r{background:rgba(248,97,90,.14);color:var(--red)}
+  .dot.off{background:var(--surface2);color:var(--faint);font-size:14px}
+  .dot.today{outline:2px solid var(--green)}
+  /* big stats */
+  .stats{display:flex;gap:12px;margin-bottom:12px}
+  .stat{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:15px}
+  .stat b{display:block;font-family:Sora,sans-serif;font-size:26px;font-weight:800;letter-spacing:-.02em}
+  .stat span{font-size:11px;color:var(--faint);font-weight:600;letter-spacing:.04em}
+  .stat b small{font-size:13px;color:var(--faint);font-weight:600}
+  /* pillar hour bars */
+  .hb{display:grid;grid-template-columns:30px 1fr 52px;align-items:center;gap:11px;margin-bottom:12px}
+  .hb:last-child{margin-bottom:2px}
+  .hb i{font-style:normal;font-size:16px}
+  .hb .track{height:9px;border-radius:99px;background:var(--surface2);overflow:hidden}
+  .hb .track b{display:block;height:100%;border-radius:99px;background:var(--c)}
+  .hb span{font-size:12px;color:var(--muted);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+  .insight{display:flex;gap:10px;align-items:flex-start;font-size:13px;line-height:1.5;color:var(--muted)}
+  .insight b{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="scroll">
+
+    <header>
+      <div><h1>Weekly Review</h1><p>Jun 8 – Jun 14</p></div>
+      <div class="nav-week"><b>‹</b><b>›</b></div>
+    </header>
+
+    <section class="card">
+      <h2>This week</h2>
+      <div class="days">
+        <div class="day"><em>MON</em><div class="dot g">84</div></div>
+        <div class="day"><em>TUE</em><div class="dot y">71</div></div>
+        <div class="day"><em>WED</em><div class="dot g">88</div></div>
+        <div class="day"><em>THU</em><div class="dot g today">80</div></div>
+        <div class="day"><em>FRI</em><div class="dot off">·</div></div>
+        <div class="day"><em>SAT</em><div class="dot off">·</div></div>
+        <div class="day"><em>SUN</em><div class="dot off">·</div></div>
+      </div>
+    </section>
+
+    <div class="stats">
+      <div class="stat"><b>81<small> avg</small></b><span>WEEK SCORE</span></div>
+      <div class="stat"><b>3<small> /4</small></b><span>GREEN DAYS</span></div>
+      <div class="stat"><b>🔥 12</b><span>STREAK</span></div>
+    </div>
+
+    <section class="card">
+      <h2>Hours by pillar</h2>
+      <div class="hb" style="--c:var(--skill)"><i>💰</i><div class="track"><b style="width:90%"></b></div><span>10.5 h</span></div>
+      <div class="hb" style="--c:var(--uni)"><i>🎓</i><div class="track"><b style="width:62%"></b></div><span>7.0 h</span></div>
+      <div class="hb" style="--c:var(--health)"><i>💪</i><div class="track"><b style="width:48%"></b></div><span>3.2 h</span></div>
+      <div class="hb" style="--c:var(--fin)"><i>📚</i><div class="track"><b style="width:18%"></b></div><span>1.3 h</span></div>
+      <div class="hb" style="--c:var(--eng)"><i>🇬🇧</i><div class="track"><b style="width:30%"></b></div><span>2.1 h</span></div>
+      <div class="hb" style="--c:var(--spirit)"><i>🧘</i><div class="track"><b style="width:14%"></b></div><span>1.1 h</span></div>
+    </section>
+
+    <section class="card">
+      <h2>Insight</h2>
+      <div class="insight">✨<p><b>Best day: Wednesday (88).</b> Skill hours are ahead of pace — University fell behind on Tuesday. One homework block tomorrow catches you up.</p></div>
+    </section>
+
+  </div>
+</div>
+</body>
+</html>

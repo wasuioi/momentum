@@ -1,0 +1,260 @@
+<!-- @dsCard group="Screens" name="Today — Desktop" subtitle="Sidebar nav + 3-column card grid" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Momentum — Today (Desktop)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E13; --surface:#141A23; --surface2:#1B2330; --line:rgba(255,255,255,.07);
+    --text:#EAF0F7; --muted:#93A0B4; --faint:#5C6A7E;
+    --skill:#F5B83D; --uni:#5BA8FF; --health:#3DDC84; --fin:#B98CF5; --eng:#FF8A8A; --spirit:#8E9BFF; --refl:#34D3C3;
+    --red:#F8615A; --yellow:#F2C94C; --green:#3DDC84;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);font-family:Inter,system-ui,sans-serif;color:var(--text);display:flex;min-height:100vh}
+  /* sidebar */
+  aside{width:218px;flex:none;border-right:1px solid var(--line);padding:26px 16px;display:flex;flex-direction:column;gap:6px}
+  .logo{display:flex;align-items:center;gap:10px;padding:0 10px;margin-bottom:22px}
+  .logo i{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;font-style:normal;
+    background:linear-gradient(135deg,#3DDC84,#34D3C3);color:#06281A;font-family:Sora,sans-serif;font-weight:800;font-size:15px}
+  .logo b{font-family:Sora,sans-serif;font-size:16px;font-weight:700;letter-spacing:-.01em}
+  aside a{display:flex;align-items:center;gap:11px;padding:10px 12px;border-radius:12px;font-size:13.5px;
+    font-weight:500;color:var(--muted);text-decoration:none}
+  aside a.on{background:var(--surface);color:var(--text);border:1px solid var(--line)}
+  aside svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+  aside a.on svg{stroke:var(--green)}
+  .side-streak{margin-top:auto;background:var(--surface);border:1px solid var(--line);border-radius:16px;
+    padding:14px;text-align:center}
+  .side-streak b{font-family:Sora,sans-serif;font-size:22px;font-weight:800;display:block}
+  .side-streak span{font-size:10.5px;color:var(--faint);font-weight:600;letter-spacing:.06em}
+  /* main */
+  main{flex:1;padding:30px 34px;max-width:1080px}
+  .top{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px}
+  .top h1{font-family:Sora,sans-serif;font-size:24px;font-weight:700}
+  .top p{font-size:13px;color:var(--faint);margin-top:3px;font-weight:500}
+  /* hero strip */
+  .strip{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:14px;margin-bottom:14px}
+  .hero{display:flex;align-items:center;gap:18px;background:linear-gradient(135deg,var(--surface),#10161F);
+    border:1px solid var(--line);border-radius:22px;padding:16px 20px}
+  .ringwrap{position:relative;display:grid;place-items:center;flex:none}
+  .ring{width:96px;aspect-ratio:1;border-radius:50%;
+    background:conic-gradient(var(--green) 80%,#222B38 0);
+    -webkit-mask:radial-gradient(farthest-side,#0000 calc(100% - 10px),#000 calc(100% - 9px));
+    mask:radial-gradient(farthest-side,#0000 calc(100% - 10px),#000 calc(100% - 9px));
+    filter:drop-shadow(0 0 12px rgba(61,220,132,.22))}
+  .ringwrap>div:last-child{position:absolute;text-align:center}
+  .rn{font-family:Sora,sans-serif;font-size:27px;font-weight:800}
+  .rs{font-size:10px;color:var(--faint);font-weight:600;margin-top:-2px}
+  .pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:5px 12px;
+    border-radius:99px;background:rgba(61,220,132,.13);color:var(--green);width:fit-content}
+  .pill i{width:7px;height:7px;border-radius:50%;background:var(--green)}
+  .hero p{font-size:12.5px;color:var(--muted);margin-top:8px}
+  .scard{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:18px 20px;
+    display:flex;flex-direction:column;justify-content:center}
+  .scard b{font-family:Sora,sans-serif;font-size:30px;font-weight:800;letter-spacing:-.02em}
+  .scard span{font-size:11px;color:var(--faint);font-weight:600;letter-spacing:.05em;margin-top:3px}
+  /* grid of pillars */
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+  .pillar{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:16px;
+    display:flex;flex-direction:column}
+  .p-head{display:flex;align-items:center;gap:11px}
+  .p-ic{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;font-size:17px;flex:none;
+    background:color-mix(in srgb,var(--c) 14%,transparent)}
+  .p-t h3{font-size:14.5px;font-weight:600}
+  .p-t span{font-size:11px;color:var(--faint)}
+  .p-pts{margin-left:auto;font-family:Sora,sans-serif;font-weight:700;font-size:15px;color:var(--c)}
+  .p-pts small{color:var(--faint);font-weight:600;font-size:10.5px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--muted);
+    padding:7px 11px;border-radius:10px;border:1px solid var(--line);background:var(--surface2)}
+  .chip svg{width:11px;height:11px;stroke:var(--faint);stroke-width:2.6;fill:none;stroke-linecap:round;stroke-linejoin:round}
+  .chip.on{color:var(--text);border-color:transparent;background:color-mix(in srgb,var(--c) 16%,transparent)}
+  .chip.on svg{stroke:var(--c)}
+  .min{display:flex;align-items:center;gap:9px;margin-top:12px}
+  .bar{height:6px;border-radius:99px;background:var(--surface2);overflow:hidden;flex:1}
+  .bar i{display:block;height:100%;border-radius:99px;background:var(--c)}
+  .mlabel{font-size:11px;color:var(--muted);font-weight:500;white-space:nowrap}
+  .quick{display:flex;gap:4px}
+  .quick b{font-size:11px;font-weight:700;background:var(--surface2);border:1px solid var(--line);
+    border-radius:8px;padding:5px 9px}
+  /* timer */
+  .tbtn{width:32px;height:32px;border-radius:50%;flex:none;display:grid;place-items:center;border:none;
+    background:color-mix(in srgb,var(--c) 14%,transparent)}
+  .tbtn svg{width:12px;height:12px;fill:var(--c)}
+  .tbtn.stop{background:var(--c)}
+  .tbtn.stop svg{fill:#0B0E13}
+  .live{display:inline-flex;align-items:center;gap:6px;font-family:Sora,sans-serif;font-weight:700;color:var(--c);
+    font-size:12.5px;font-variant-numeric:tabular-nums}
+  .live i{width:7px;height:7px;border-radius:50%;background:var(--c);animation:pulse 1.2s infinite}
+  @keyframes pulse{50%{opacity:.35}}
+  /* mission / win / alert */
+  .mission{background:linear-gradient(135deg,#15231D,#141A23 60%);border:1px solid color-mix(in srgb,var(--green) 25%,transparent);
+    border-radius:22px;padding:16px 20px;margin-bottom:14px}
+  .m-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .m-label{font-size:10.5px;font-weight:700;letter-spacing:.1em;color:var(--green)}
+  .m-deadline{font-size:11.5px;color:var(--muted);font-weight:500}
+  .mission h2{font-family:Sora,sans-serif;font-size:19px;font-weight:700;margin-bottom:12px}
+  .m-bar{height:7px;border-radius:99px;background:var(--surface2);overflow:hidden}
+  .m-bar i{display:block;height:100%;border-radius:99px;background:linear-gradient(90deg,var(--green),var(--refl))}
+  .m-foot{display:flex;justify-content:space-between;margin-top:7px;font-size:11.5px;color:var(--faint);font-weight:500}
+  .m-foot b{color:var(--green);font-family:Sora,sans-serif}
+  .strip2{display:flex;gap:14px;margin-bottom:14px}
+  .win{flex:1.6;display:flex;gap:11px;align-items:flex-start;background:var(--surface);border:1px solid var(--line);
+    border-radius:20px;padding:14px 16px;font-size:17px}
+  .win label{display:block;font-size:11px;font-weight:700;letter-spacing:.08em;color:var(--skill);margin-bottom:5px}
+  .win .in{font-size:13px;line-height:1.45}
+  .alert{flex:1;display:flex;gap:9px;align-items:center;background:rgba(242,201,76,.09);border:1px solid rgba(242,201,76,.25);
+    border-radius:14px;padding:11px 14px;font-size:12.5px;font-weight:500;color:#E8D9A0}
+  /* note field — one line, optional */
+  .note{margin-top:auto;padding:9px 12px;margin-top:12px;background:var(--surface2);border:1px solid var(--line);
+    border-radius:10px;font-size:12px;line-height:1.4;color:var(--text)}
+  .note.empty{color:var(--faint)}
+  .refl .qs{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px}
+  .refl label{display:block;font-size:11px;color:var(--muted);font-weight:500;margin-bottom:6px}
+  .refl .in{background:var(--surface2);border:1px solid var(--line);border-radius:11px;padding:10px 12px;
+    font-size:12.5px;line-height:1.45;min-height:64px}
+</style>
+</head>
+<body>
+
+<aside>
+  <div class="logo"><i>M</i><b>Momentum</b></div>
+  <a class="on" href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Today</a>
+  <a href="#"><svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>Week</a>
+  <a href="#"><svg viewBox="0 0 24 24"><path d="M4 19V10M10 19V5M16 19v-7M21 19H3"/></svg>Month</a>
+  <a href="#"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M2 12h3M19 12h3M4.9 19.1L7 17M17 7l2.1-2.1"/></svg>Settings</a>
+  <div class="side-streak">🔥<b>12 days</b><span>CURRENT STREAK</span></div>
+  <div class="side-streak" style="--c:var(--uni);margin-top:10px;border-color:color-mix(in srgb,var(--uni) 40%,transparent)">
+    <span class="live"><i></i>23:41</span>
+    <b style="font-size:14px">🎓 University</b><span>TRACKING · CLICK TO STOP</span>
+  </div>
+</aside>
+
+<main>
+  <div class="top">
+    <div><h1>Today</h1><p>Thursday, June 12 · 2026</p></div>
+  </div>
+
+  <section class="mission">
+    <div class="m-top"><span class="m-label">🎯 CURRENT MISSION</span><span class="m-deadline">Aug 31 · 80 days left</span></div>
+    <h2>Launch TrueVibe MVP</h2>
+    <div class="m-bar"><i style="width:62%"></i></div>
+    <div class="m-foot"><span>Progress</span><b>62%</b></div>
+  </section>
+
+  <div class="strip">
+    <div class="hero">
+      <div class="ringwrap"><div class="ring"></div><div><div class="rn">80</div><div class="rs">/ 100</div></div></div>
+      <div><span class="pill"><i></i>Green Day</span><p>One more green day —<br>keep the streak alive.</p></div>
+    </div>
+    <div class="scard"><b>78</b><span>MONTH AVERAGE</span></div>
+    <div class="scard"><b>21</b><span>BEST STREAK</span></div>
+  </div>
+
+  <div class="strip2">
+    <section class="win">🏆
+      <div><label>BIGGEST WIN TODAY</label>
+      <div class="in">Shipped the auth flow — client loved it.</div></div>
+    </section>
+    <div class="alert">⚠️ Health below target — 5 days in a row</div>
+  </div>
+
+  <div class="grid">
+
+    <article class="pillar" style="--c:var(--skill)">
+      <div class="p-head"><div class="p-ic">💰</div>
+        <div class="p-t"><h3>Skill &amp; Income</h3><span>210 / 240 min</span></div>
+        <div class="p-pts">35<small> /40</small></div></div>
+      <div class="chips">
+        <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Learn</span>
+        <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Code</span>
+        <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Project</span>
+        <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Research</span>
+        <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Freelance</span>
+      </div>
+      <div class="min"><button class="tbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="bar"><i style="width:88%"></i></div><span class="mlabel">210/240</span></div>
+      <div class="note">Built OAuth login for client project + Stripe docs</div>
+    </article>
+
+    <article class="pillar" style="--c:var(--uni);outline:1px solid color-mix(in srgb,var(--uni) 45%,transparent);box-shadow:0 0 26px rgba(91,168,255,.13)">
+      <div class="p-head"><div class="p-ic">🎓</div>
+        <div class="p-t"><h3>University</h3><span>90 / 120 min · tracking…</span></div>
+        <div class="p-pts">15<small> /20</small></div></div>
+      <div class="chips">
+        <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Attend class</span>
+        <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Review</span>
+        <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Homework</span>
+        <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Read ahead</span>
+      </div>
+      <div class="min"><button class="tbtn stop"><svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/></svg></button>
+        <div class="bar"><i style="width:75%"></i></div>
+        <span class="mlabel"><span class="live"><i></i>23:41</span> · 90/120</span></div>
+      <div class="note">Calculus lecture + reviewed chapter 4 notes</div>
+    </article>
+
+    <article class="pillar" style="--c:var(--health)">
+      <div class="p-head"><div class="p-ic">💪</div>
+        <div class="p-t"><h3>Health</h3><span>45 / 60 min</span></div>
+        <div class="p-pts">11<small> /20</small></div></div>
+      <div class="chips">
+        <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Slept 7h+</span>
+      </div>
+      <div class="min"><button class="tbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="bar"><i style="width:75%"></i></div><span class="mlabel">45/60</span></div>
+      <div class="note">Push day — chest &amp; shoulders</div>
+    </article>
+
+    <article class="pillar" style="--c:var(--fin);outline:1px solid color-mix(in srgb,var(--fin) 35%,transparent)">
+      <div class="p-head"><div class="p-ic">📚</div>
+        <div class="p-t"><h3>Financial Education</h3><span>20 / 20 min · done ✦</span></div>
+        <div class="p-pts">5<small> /5</small></div></div>
+      <div class="min"><button class="tbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="bar"><i style="width:100%"></i></div><span class="mlabel">20/20</span></div>
+      <div class="note">Psychology of Money ch. 3 — ETF expense ratios</div>
+    </article>
+
+    <article class="pillar" style="--c:var(--eng)">
+      <div class="p-head"><div class="p-ic">🇬🇧</div>
+        <div class="p-t"><h3>English</h3><span>25 / 30 min</span></div>
+        <div class="p-pts">4<small> /5</small></div></div>
+      <div class="min"><button class="tbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="bar"><i style="width:83%"></i></div><span class="mlabel">25/30</span></div>
+      <div class="note empty">What did you do? (optional)</div>
+    </article>
+
+    <article class="pillar" style="--c:var(--spirit);outline:1px solid color-mix(in srgb,var(--spirit) 35%,transparent)">
+      <div class="p-head"><div class="p-ic">🧘</div>
+        <div class="p-t"><h3>Mindfulness</h3><span>10 / 10 min · done ✦</span></div>
+        <div class="p-pts">5<small> /5</small></div></div>
+      <div class="chips">
+        <span class="chip on"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Meditate</span>
+        <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Self-review</span>
+        <span class="chip"><svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"/></svg>Gratitude</span>
+      </div>
+      <div class="min"><button class="tbtn"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="bar"><i style="width:100%"></i></div><span class="mlabel">10/10</span></div>
+      <div class="note">10 min breathing meditation after shower</div>
+    </article>
+
+    <article class="pillar refl" style="--c:var(--refl);grid-column:span 3">
+      <div class="p-head"><div class="p-ic">🌱</div>
+        <div class="p-t"><h3>Reflection</h3><span>2 questions before bed</span></div>
+        <div class="p-pts">5<small> /5</small></div></div>
+      <div class="qs" style="grid-template-columns:repeat(2,1fr)">
+        <div><label>What went wrong?</label>
+          <div class="in">Slept too late again, only 6 hours.</div></div>
+        <div><label>One thing for tomorrow?</label>
+          <div class="in">Finish chapter 4 problem set before noon.</div></div>
+      </div>
+    </article>
+
+  </div>
+</main>
+
+</body>
+</html>

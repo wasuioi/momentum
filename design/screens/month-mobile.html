@@ -1,0 +1,136 @@
+<!-- @dsCard group="Screens" name="Month — Mobile" subtitle="Heat calendar, score trend, pillar totals" -->
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Momentum — Month</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0B0E13; --surface:#141A23; --surface2:#1B2330; --line:rgba(255,255,255,.07);
+    --text:#EAF0F7; --muted:#93A0B4; --faint:#5C6A7E;
+    --skill:#F5B83D; --uni:#5BA8FF; --health:#3DDC84; --fin:#B98CF5; --eng:#FF8A8A; --spirit:#8E9BFF; --refl:#34D3C3;
+    --red:#F8615A; --yellow:#F2C94C; --green:#3DDC84;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:#06080C;display:grid;place-items:start center;padding:24px;font-family:Inter,system-ui,sans-serif;color:var(--text)}
+  .phone{width:390px;background:var(--bg);border-radius:34px;border:1px solid var(--line);overflow:hidden;
+    box-shadow:0 30px 80px rgba(0,0,0,.55)}
+  .scroll{padding:22px 18px 30px}
+  header{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:16px;padding:0 2px}
+  header h1{font-family:Sora,sans-serif;font-size:22px;font-weight:700}
+  header p{font-size:12.5px;color:var(--faint);font-weight:500;margin-top:2px}
+  .nav-m{display:flex;gap:8px}
+  .nav-m b{width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:var(--surface);
+    border:1px solid var(--line);color:var(--muted);font-weight:600}
+  .stats{display:flex;gap:12px;margin-bottom:12px}
+  .stat{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:15px}
+  .stat b{display:block;font-family:Sora,sans-serif;font-size:26px;font-weight:800;letter-spacing:-.02em}
+  .stat span{font-size:10.5px;color:var(--faint);font-weight:600;letter-spacing:.04em}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:17px;margin-bottom:12px}
+  .card h2{font-size:12px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);font-weight:600;margin-bottom:14px}
+  /* calendar */
+  .cal{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+  .cal em{font-style:normal;font-size:10px;font-weight:600;color:var(--faint);text-align:center;letter-spacing:.04em}
+  .c{aspect-ratio:1;border-radius:9px;background:var(--surface2);display:grid;place-items:center;
+    font-size:10.5px;font-weight:600;color:var(--faint)}
+  .c.g{background:rgba(61,220,132,.2);color:var(--green)}
+  .c.g2{background:rgba(61,220,132,.42);color:#CFF8E2}
+  .c.y{background:rgba(242,201,76,.2);color:var(--yellow)}
+  .c.r{background:rgba(248,97,90,.2);color:var(--red)}
+  .c.today{outline:2px solid var(--green)}
+  .c.future{background:transparent;border:1px dashed var(--line)}
+  .legend{display:flex;gap:14px;margin-top:13px;font-size:11px;color:var(--faint);font-weight:500}
+  .legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+  /* trend chart */
+  .chart{position:relative}
+  .chart svg{width:100%;height:110px;display:block}
+  .gl{stroke:var(--line);stroke-width:1}
+  .glt{font-size:9px;fill:var(--faint);font-family:Inter}
+  /* life trend */
+  .t-row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;
+    border-bottom:1px dashed var(--line);font-size:13.5px;font-weight:500}
+  .t-row:last-child{border-bottom:0}
+  .t-row.big{font-weight:700;font-size:15px;font-family:Sora,sans-serif}
+  .t-row b{font-family:Sora,sans-serif;font-weight:700;font-variant-numeric:tabular-nums}
+  .up{color:var(--green)} .down{color:var(--red)}
+  /* pillar totals */
+  .hb{display:grid;grid-template-columns:30px 1fr 56px;align-items:center;gap:11px;margin-bottom:12px}
+  .hb:last-child{margin-bottom:2px}
+  .hb i{font-style:normal;font-size:16px}
+  .hb .track{height:9px;border-radius:99px;background:var(--surface2);overflow:hidden}
+  .hb .track b{display:block;height:100%;border-radius:99px;background:var(--c)}
+  .hb span{font-size:12px;color:var(--muted);font-weight:600;text-align:right;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="scroll">
+
+    <header>
+      <div><h1>June 2026</h1><p>Monthly review</p></div>
+      <div class="nav-m"><b>‹</b><b>›</b></div>
+    </header>
+
+    <div class="stats">
+      <div class="stat"><b>78</b><span>AVG SCORE</span></div>
+      <div class="stat"><b>14</b><span>GREEN DAYS</span></div>
+      <div class="stat"><b>🔥 12</b><span>BEST STREAK</span></div>
+    </div>
+
+    <section class="card">
+      <h2>Life trend — last 30 days vs previous</h2>
+      <div class="t-row big"><span>Overall</span><b class="up">▲ +12%</b></div>
+      <div class="t-row"><span>💰 Skill &amp; Income</span><b class="up">▲ +18%</b></div>
+      <div class="t-row"><span>🧘 Mindfulness</span><b class="up">▲ +42%</b></div>
+      <div class="t-row"><span>💪 Health</span><b class="down">▼ −7%</b></div>
+      <div class="t-row"><span>🇬🇧 English</span><b class="up">▲ +5%</b></div>
+    </section>
+
+    <section class="card">
+      <h2>Calendar</h2>
+      <div class="cal">
+        <em>M</em><em>T</em><em>W</em><em>T</em><em>F</em><em>S</em><em>S</em>
+        <div class="c g">1</div><div class="c g2">2</div><div class="c y">3</div><div class="c g">4</div><div class="c g">5</div><div class="c r">6</div><div class="c y">7</div>
+        <div class="c g">8</div><div class="c y">9</div><div class="c g2">10</div><div class="c g">11</div><div class="c g today">12</div><div class="c future">13</div><div class="c future">14</div>
+        <div class="c future">15</div><div class="c future">16</div><div class="c future">17</div><div class="c future">18</div><div class="c future">19</div><div class="c future">20</div><div class="c future">21</div>
+        <div class="c future">22</div><div class="c future">23</div><div class="c future">24</div><div class="c future">25</div><div class="c future">26</div><div class="c future">27</div><div class="c future">28</div>
+        <div class="c future">29</div><div class="c future">30</div>
+      </div>
+      <div class="legend">
+        <span><i style="background:rgba(61,220,132,.35)"></i>Green 80+</span>
+        <span><i style="background:rgba(242,201,76,.35)"></i>Yellow 40–79</span>
+        <span><i style="background:rgba(248,97,90,.35)"></i>Red &lt;40</span>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Score trend</h2>
+      <div class="chart">
+        <svg viewBox="0 0 340 110" preserveAspectRatio="none">
+          <line class="gl" x1="0" y1="14" x2="340" y2="14"/><text class="glt" x="2" y="11">100</text>
+          <line class="gl" x1="0" y1="58" x2="340" y2="58"/><text class="glt" x="2" y="55">50</text>
+          <line class="gl" x1="0" y1="102" x2="340" y2="102"/><text class="glt" x="2" y="99">0</text>
+          <polyline points="14,28 42,22 70,46 98,30 126,26 154,80 182,50 210,32 238,44 266,21 294,30 322,28"
+            fill="none" stroke="#3DDC84" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="322" cy="28" r="4" fill="#3DDC84"/>
+        </svg>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>Totals this month</h2>
+      <div class="hb" style="--c:var(--skill)"><i>💰</i><div class="track"><b style="width:84%"></b></div><span>38 h</span></div>
+      <div class="hb" style="--c:var(--uni)"><i>🎓</i><div class="track"><b style="width:58%"></b></div><span>26 h</span></div>
+      <div class="hb" style="--c:var(--health)"><i>💪</i><div class="track"><b style="width:52%"></b></div><span>14 h</span></div>
+      <div class="hb" style="--c:var(--fin)"><i>📚</i><div class="track"><b style="width:16%"></b></div><span>4.2 h</span></div>
+      <div class="hb" style="--c:var(--eng)"><i>🇬🇧</i><div class="track"><b style="width:28%"></b></div><span>7.5 h</span></div>
+      <div class="hb" style="--c:var(--spirit)"><i>🧘</i><div class="track"><b style="width:14%"></b></div><span>3.5 h</span></div>
+    </section>
+
+  </div>
+</div>
+</body>
+</html>
