@@ -92,8 +92,70 @@ async function render() {
   } catch (e) { showError(e); throw e; }
 }
 
-// view stubs — replaced one by one in Tasks 13, 14, 15
-async function renderWeek() { $('#view').innerHTML = '<p class="loading">Week</p>'; }
+function rangeLabel(from, to) {
+  const opt = { month: 'short', day: 'numeric' };
+  const f = new Date(from + 'T00:00:00'), t = new Date(to + 'T00:00:00');
+  return `${f.toLocaleDateString('en-US', opt)} – ${t.toLocaleDateString('en-US', opt)}`;
+}
+
+async function renderWeek() {
+  const monday = S.startOfWeek(S.addDays(today, weekOffset * 7));
+  const dates = Array.from({ length: 7 }, (_, i) => S.addDays(monday, i));
+  const rows = await db.getDays(S.addDays(monday, -60), dates[6]);
+  const byDate = {}; for (const r of rows) byDate[r.date] = r;
+  const names = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
+
+  const dots = dates.map((d, i) => {
+    const r = byDate[d];
+    const cls = r ? S.dayStatus(r.score) : 'off';
+    return `<div class="day7"><em>${names[i]}</em>
+      <div class="dot ${cls} ${d === today ? 'today' : ''}">${r ? r.score : '·'}</div></div>`;
+  }).join('');
+
+  const weekRows = dates.filter(d => byDate[d]).map(d => byDate[d]);
+  const avg = weekRows.length ? Math.round(weekRows.reduce((a, r) => a + r.score, 0) / weekRows.length) : 0;
+  const greens = weekRows.filter(r => r.score >= 80).length;
+  const scoreByDate = {}; for (const r of rows) scoreByDate[r.date] = r.score;
+  const stk = S.streak(scoreByDate, today);
+
+  const hours = PILLARS.map(p => ({
+    p, mins: weekRows.reduce((a, r) => a + (r.data.minutes?.[p.key] ?? 0), 0),
+  }));
+  const maxMins = Math.max(60, ...hours.map(h => h.mins));
+  const bars = hours.map(({ p, mins }) => `
+    <div class="hb" style="--c:var(--${p.key})"><i>${p.icon}</i>
+      <div class="track"><b style="width:${Math.round(mins / maxMins * 100)}%"></b></div>
+      <span>${(mins / 60).toFixed(1)} h</span></div>`).join('');
+
+  let insight = 'No data yet this week — press play on a pillar to start.';
+  if (weekRows.length) {
+    const bestRow = weekRows.reduce((a, r) => (r.score > a.score ? r : a));
+    const weakest = hours.reduce((a, h) =>
+      (h.mins / (targets[h.p.key] * 7) < a.mins / (targets[a.p.key] * 7) ? h : a));
+    insight = `<b>Best day: ${fmtLongDate(bestRow.date).split(',')[0]} (${bestRow.score}).</b>
+      ${weakest.p.name} is furthest behind this week — one focused session catches you up.`;
+  }
+
+  $('#view').innerHTML = `
+    <div class="headrow">
+      <div><h1>Weekly Review</h1><p>${rangeLabel(monday, dates[6])}</p></div>
+      <div class="navbtns">
+        <button data-action="weeknav" data-dir="-1">‹</button>
+        <button data-action="weeknav" data-dir="1">›</button>
+      </div>
+    </div>
+    <section class="card"><h2>This week</h2><div class="days7">${dots}</div></section>
+    <div class="stats3">
+      <div class="stat3"><b>${avg}<small> avg</small></b><span>WEEK SCORE</span></div>
+      <div class="stat3"><b>${greens}<small> /${weekRows.length}</small></b><span>GREEN DAYS</span></div>
+      <div class="stat3"><b>🔥 ${stk}</b><span>STREAK</span></div>
+    </div>
+    <section class="card"><h2>Hours by pillar</h2>${bars}</section>
+    <section class="card"><h2>Insight</h2><div class="insight">✨<p>${insight}</p></div></section>
+    ${timer ? trackNowHtml() : ''}`;
+  renderNavTimer();
+}
+
 async function renderMonth() { $('#view').innerHTML = '<p class="loading">Month</p>'; }
 async function renderSettings() { $('#view').innerHTML = '<p class="loading">Settings</p>'; }
 async function toggleTimer(pillar) {
