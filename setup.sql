@@ -12,6 +12,11 @@
 -- a clear error instead of guessing.
 select set_config('momentum.legacy_owner_id', '', false);
 
+-- Existing accepted friendships are trusted by profile/live_status read policies.
+-- Keep this false unless you have audited every existing accepted friendship row
+-- or you are intentionally re-running after admin-seeded friendships.
+select set_config('momentum.allow_existing_accepted_friendships', 'false', false);
+
 create extension if not exists pgcrypto;
 
 create table if not exists profiles (
@@ -191,6 +196,49 @@ begin
   end if;
 end $$;
 
+-- Drop friend-read policies before the accepted-row audit. If this script is
+-- being applied statement-by-statement and the audit stops, unaudited accepted
+-- rows should not keep granting friend visibility.
+drop policy if exists "profiles accepted friends read" on profiles;
+drop policy if exists "live_status accepted friends read" on live_status;
+
+-- Stop before trusting accepted rows that might have been created by older,
+-- weaker client-side friendship policies.
+do $$
+declare
+  accepted_friendship_count int;
+  allow_existing_accepted_friendships boolean :=
+    lower(coalesce(current_setting('momentum.allow_existing_accepted_friendships', true), 'false')) = 'true';
+begin
+  select count(*) into accepted_friendship_count
+  from public.friendships
+  where status = 'accepted';
+
+  if accepted_friendship_count > 0 and not allow_existing_accepted_friendships then
+    raise exception
+      'Existing accepted friendships need audit. Review friendships rows, delete untrusted rows, then set momentum.allow_existing_accepted_friendships to true before rerunning setup.sql.';
+  end if;
+end $$;
+
+-- Stop with a clear message before the normalized pair index would fail.
+do $$
+declare
+  duplicate_pair_count int;
+begin
+  select count(*) into duplicate_pair_count
+  from (
+    select 1
+    from public.friendships
+    group by least(requester_id, addressee_id), greatest(requester_id, addressee_id)
+    having count(*) > 1
+  ) duplicate_pairs;
+
+  if duplicate_pair_count > 0 then
+    raise exception
+      'Duplicate or reversed friendship rows exist. Keep only one row for each user pair, delete the extra rows, then rerun setup.sql.';
+  end if;
+end $$;
+
 create index if not exists activity_sessions_user_date_idx on activity_sessions (user_id, date, started_at);
 create index if not exists friendships_addressee_idx on friendships (addressee_id, status);
 create unique index if not exists friendships_unique_pair_idx
@@ -212,7 +260,6 @@ create policy "profiles owner read write" on profiles
   using (id = auth.uid())
   with check (id = auth.uid());
 
-drop policy if exists "profiles accepted friends read" on profiles;
 create policy "profiles accepted friends read" on profiles
   for select to authenticated
   using (
@@ -274,7 +321,6 @@ create policy "live_status owner write" on live_status
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
 
-drop policy if exists "live_status accepted friends read" on live_status;
 create policy "live_status accepted friends read" on live_status
   for select to authenticated
   using (
