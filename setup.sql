@@ -1,5 +1,7 @@
 -- Momentum schema. Paste into Supabase Dashboard > SQL Editor > Run.
 -- Multi-user foundation: private diary data, friend-visible live status only.
+-- Deploy this together with the owner-scoped app API changes. The old
+-- single-user app writes do not include user_id.
 --
 -- Existing single-user installs need an owner for old days/app_state rows.
 -- Fresh database: leave this blank.
@@ -40,6 +42,10 @@ create table if not exists app_state (
   value jsonb,
   primary key (user_id, key)
 );
+
+-- Remove old broad policies before any fail-fast migration guard can stop.
+drop policy if exists "authenticated full access" on days;
+drop policy if exists "authenticated full access" on app_state;
 
 -- Upgrade old single-user tables that were created before user_id existed.
 do $$
@@ -209,16 +215,22 @@ declare
   accepted_friendship_count int;
   allow_existing_accepted_friendships boolean :=
     lower(coalesce(current_setting('momentum.allow_existing_accepted_friendships', true), 'false')) = 'true';
+  accepted_friendships_already_audited boolean :=
+    coalesce(obj_description('public.friendships'::regclass), '') like '%momentum.accepted_friendships_audited=true%';
 begin
   select count(*) into accepted_friendship_count
   from public.friendships
   where status = 'accepted';
 
-  if accepted_friendship_count > 0 and not allow_existing_accepted_friendships then
+  if accepted_friendship_count > 0
+    and not allow_existing_accepted_friendships
+    and not accepted_friendships_already_audited then
     raise exception
       'Existing accepted friendships need audit. Review friendships rows, delete untrusted rows, then set momentum.allow_existing_accepted_friendships to true before rerunning setup.sql.';
   end if;
 end $$;
+
+comment on table friendships is 'momentum.accepted_friendships_audited=true';
 
 -- Stop with a clear message before the normalized pair index would fail.
 do $$
@@ -250,9 +262,6 @@ alter table app_state enable row level security;
 alter table activity_sessions enable row level security;
 alter table friendships enable row level security;
 alter table live_status enable row level security;
-
-drop policy if exists "authenticated full access" on days;
-drop policy if exists "authenticated full access" on app_state;
 
 drop policy if exists "profiles owner read write" on profiles;
 create policy "profiles owner read write" on profiles
