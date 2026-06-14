@@ -80,6 +80,20 @@ export async function setState(key, value) {
   if (error) throw error;
 }
 
+export async function claimTimer(timer) {
+  const userId = await requireUserId();
+  const { data, error } = await sb.from('app_state')
+    .update({ value: null })
+    .eq('user_id', userId)
+    .eq('key', 'timer')
+    .eq('value->>started_at', timer.started_at)
+    .eq('value->>pillar', timer.pillar)
+    .select('key')
+    .maybeSingle();
+  if (error) throw error;
+  return !!data;
+}
+
 export async function getActivitySessions(date) {
   const userId = await requireUserId();
   const { data, error } = await sb.from('activity_sessions')
@@ -90,7 +104,8 @@ export async function getActivitySessions(date) {
 
 export async function createActivitySession(session) {
   const userId = await requireUserId();
-  const { error } = await sb.from('activity_sessions').insert({ ...session, user_id: userId });
+  const { error } = await sb.from('activity_sessions')
+    .upsert({ ...session, user_id: userId }, { onConflict: 'user_id,started_at,pillar', ignoreDuplicates: true });
   if (error) throw error;
 }
 

@@ -272,6 +272,7 @@ begin
 end $$;
 
 create index if not exists activity_sessions_user_date_idx on activity_sessions (user_id, date, started_at);
+create unique index if not exists activity_sessions_unique_timer_idx on activity_sessions (user_id, started_at, pillar);
 create index if not exists friendships_addressee_idx on friendships (addressee_id, status);
 create unique index if not exists friendships_unique_pair_idx
   on friendships (least(requester_id, addressee_id), greatest(requester_id, addressee_id));

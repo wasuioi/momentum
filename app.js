@@ -309,42 +309,34 @@ async function toggleTimer(pillar) {
     timer = { pillar, started_at: new Date().toISOString(), share_note: false };
     shareNote = { ...shareNote, [pillar]: false };
     await db.setState('timer', timer);
-    await publishLiveStatus();
     await render();
+    await publishLiveStatus();
   } finally { timerBusy = false; }
 }
 
 async function stopTimer() {
   if (!timer) return;
-  const t = timer; timer = null;
-  // another device may have already stopped/replaced this timer — verify before banking
-  const dbTimer = await db.getState('timer', null);
-  if (!dbTimer || dbTimer.started_at !== t.started_at || dbTimer.pillar !== t.pillar) return;
-  await db.setState('timer', null);
+  const t = timer;
+  // another device may have already stopped/replaced this timer — claim before banking
+  const claimed = await db.claimTimer(t);
+  timer = null;
+  if (!claimed) return;
+  const restoreTimer = async () => {
+    timer = t;
+    await db.setState('timer', t);
+    await publishLiveStatus();
+  };
+  try { await publishLiveStatus(); }
+  catch (e) { await restoreTimer(); throw e; }
+
   const mins = S.elapsedMinutes(t.started_at, Date.now());
   const endedAt = new Date().toISOString();
-  if (mins <= 0) { await publishLiveStatus(); return; } // under a minute: nothing to bank
+  if (mins <= 0) return; // under a minute: nothing to bank
   const startDate = S.toDateStr(new Date(Date.parse(t.started_at)));
+  let daySaved = false;
   if (startDate === today) {
-    day.minutes[t.pillar] = (day.minutes[t.pillar] || 0) + mins;
-    await saveToday();
-    await db.createActivitySession({
-      date: startDate,
-      pillar: t.pillar,
-      started_at: t.started_at,
-      ended_at: endedAt,
-      minutes: mins,
-      tag_ids: selectedTagsFor(t.pillar),
-      note_snapshot: day.notes[t.pillar] || '',
-    });
-  } else {
-    // timer crossed midnight: credit the day it was started (spec §4)
-    const saveMidnight = async () => {
-      const row = await db.getDay(startDate);
-      const d = row ? { ...emptyDay(), ...row.data } : emptyDay();
-      d.minutes[t.pillar] = (d.minutes[t.pillar] || 0) + mins;
-      d.points = S.dayPoints(d, targets);
-      await db.saveDay(startDate, d, S.dayScore(d.points));
+    const previousMinutes = day.minutes[t.pillar] || 0;
+    try {
       await db.createActivitySession({
         date: startDate,
         pillar: t.pillar,
@@ -352,13 +344,45 @@ async function stopTimer() {
         ended_at: endedAt,
         minutes: mins,
         tag_ids: selectedTagsFor(t.pillar),
+        note_snapshot: day.notes[t.pillar] || '',
+      });
+      day.minutes[t.pillar] = previousMinutes + mins;
+      await saveToday();
+      daySaved = true;
+    } catch (e) {
+      if (!daySaved) {
+        day.minutes[t.pillar] = previousMinutes;
+        await restoreTimer();
+      }
+      throw e;
+    }
+  } else {
+    // timer crossed midnight: credit the day it was started (spec §4)
+    const saveMidnight = async () => {
+      const row = await db.getDay(startDate);
+      const d = row ? { ...emptyDay(), ...row.data } : emptyDay();
+      await db.createActivitySession({
+        date: startDate,
+        pillar: t.pillar,
+        started_at: t.started_at,
+        ended_at: endedAt,
+        minutes: mins,
+        tag_ids: d.tags?.[t.pillar] || [],
         note_snapshot: d.notes?.[t.pillar] || day.notes[t.pillar] || '',
       });
+      d.minutes[t.pillar] = (d.minutes[t.pillar] || 0) + mins;
+      d.points = S.dayPoints(d, targets);
+      await db.saveDay(startDate, d, S.dayScore(d.points));
+      daySaved = true;
     };
     try { await saveMidnight(); }
-    catch (e) { lastFailed = saveMidnight; showError(e); throw e; }
+    catch (e) {
+      if (!daySaved) {
+        await restoreTimer();
+      }
+      lastFailed = saveMidnight; showError(e); throw e;
+    }
   }
-  await publishLiveStatus();
 }
 
 function chipBtn(pillarKey, id, label, on) {
