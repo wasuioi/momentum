@@ -19,7 +19,8 @@ const PILLARS = [
 // ---- state ----
 let targets = { ...S.DEFAULT_TARGETS };
 let mission = null;             // {title, deadline, progress} | null
-let timer = null;               // {pillar, started_at} | null
+let timer = null;               // {pillar, started_at, share_note?: boolean} | null
+let shareNote = {};             // per-pillar live note sharing for the current tracking context
 let today = S.toDateStr(new Date());
 let day = emptyDay();           // today's data (spec §5 shape)
 let weekOffset = 0;
@@ -66,6 +67,7 @@ async function boot() {
   targets = await db.getState('targets', { ...S.DEFAULT_TARGETS });
   mission = await db.getState('mission', null);
   timer = await db.getState('timer', null);
+  if (timer?.pillar) shareNote = { ...shareNote, [timer.pillar]: !!timer.share_note };
   await loadToday();
   window.addEventListener('hashchange', render);
   setInterval(tick, 1000);
@@ -304,8 +306,10 @@ async function toggleTimer(pillar) {
   try {
     if (timer && timer.pillar === pillar) { await stopTimer(); await render(); return; }
     if (timer) await stopTimer(); // switching pillars: bank the old one first
-    timer = { pillar, started_at: new Date().toISOString() };
+    timer = { pillar, started_at: new Date().toISOString(), share_note: false };
+    shareNote = { ...shareNote, [pillar]: false };
     await db.setState('timer', timer);
+    await publishLiveStatus();
     await render();
   } finally { timerBusy = false; }
 }
@@ -318,11 +322,21 @@ async function stopTimer() {
   if (!dbTimer || dbTimer.started_at !== t.started_at || dbTimer.pillar !== t.pillar) return;
   await db.setState('timer', null);
   const mins = S.elapsedMinutes(t.started_at, Date.now());
-  if (mins <= 0) return; // under a minute: nothing to bank
+  const endedAt = new Date().toISOString();
+  if (mins <= 0) { await publishLiveStatus(); return; } // under a minute: nothing to bank
   const startDate = S.toDateStr(new Date(Date.parse(t.started_at)));
   if (startDate === today) {
     day.minutes[t.pillar] = (day.minutes[t.pillar] || 0) + mins;
     await saveToday();
+    await db.createActivitySession({
+      date: startDate,
+      pillar: t.pillar,
+      started_at: t.started_at,
+      ended_at: endedAt,
+      minutes: mins,
+      tag_ids: selectedTagsFor(t.pillar),
+      note_snapshot: day.notes[t.pillar] || '',
+    });
   } else {
     // timer crossed midnight: credit the day it was started (spec §4)
     const saveMidnight = async () => {
@@ -331,10 +345,20 @@ async function stopTimer() {
       d.minutes[t.pillar] = (d.minutes[t.pillar] || 0) + mins;
       d.points = S.dayPoints(d, targets);
       await db.saveDay(startDate, d, S.dayScore(d.points));
+      await db.createActivitySession({
+        date: startDate,
+        pillar: t.pillar,
+        started_at: t.started_at,
+        ended_at: endedAt,
+        minutes: mins,
+        tag_ids: selectedTagsFor(t.pillar),
+        note_snapshot: d.notes?.[t.pillar] || day.notes[t.pillar] || '',
+      });
     };
     try { await saveMidnight(); }
     catch (e) { lastFailed = saveMidnight; showError(e); throw e; }
   }
+  await publishLiveStatus();
 }
 
 function chipBtn(pillarKey, id, label, on) {
@@ -372,6 +396,7 @@ function pillarCard(p, points) {
         : `<button class="mlabel" data-action="editmin" data-pillar="${p.key}" title="Tap to edit minutes">${mins}/${t}</button>`}
     </div>
     <input class="note" data-note="${p.key}" placeholder="What did you do? (optional)" value="${esc(day.notes[p.key])}">
+    ${running ? `<label class="share-note"><input type="checkbox" data-action="sharenote" data-pillar="${p.key}" ${shareNote[p.key] ? 'checked' : ''}> Share note with friends</label>` : ''}
   </article>`;
 }
 
@@ -395,6 +420,27 @@ function renderNavTimer() {
   el.innerHTML = `<button class="navtimer-card" style="--c:var(--${p.key})" data-action="timer" data-pillar="${p.key}">
     <span class="live"><i></i><span data-elapsed>00:00</span></span>
     <b>${p.icon} ${p.name}</b><span>TRACKING · CLICK TO STOP</span></button>`;
+}
+
+function selectedTagsFor(pillar) {
+  return day.tags[pillar] || [];
+}
+
+function sharedNoteFor(pillar) {
+  return shareNote[pillar] ? (day.notes[pillar] || '').trim() : '';
+}
+
+async function publishLiveStatus() {
+  if (!timer) {
+    await db.setLiveStatus({ is_tracking: false });
+    return;
+  }
+  await db.setLiveStatus({
+    is_tracking: true,
+    pillar: timer.pillar,
+    tag_ids: selectedTagsFor(timer.pillar),
+    shared_note: sharedNoteFor(timer.pillar),
+  });
 }
 
 async function renderToday() {
@@ -491,7 +537,9 @@ document.body.addEventListener('click', async ev => {
       const arr = day.tags[pillar] || (day.tags[pillar] = []);
       const i = arr.indexOf(id);
       i >= 0 ? arr.splice(i, 1) : arr.push(id);
-      await saveToday(); await render();
+      await saveToday();
+      if (timer?.pillar === pillar) await publishLiveStatus();
+      await render();
     } else if (a === 'sleep') {
       day.sleep_ok = !day.sleep_ok;
       await saveToday(); await render();
@@ -503,6 +551,15 @@ document.body.addEventListener('click', async ev => {
       if (Number.isNaN(n) || n < 0) return;
       day.minutes[p] = n;
       await saveToday(); await render();
+    } else if (a === 'sharenote') {
+      const p = btn.dataset.pillar;
+      shareNote[p] = !shareNote[p];
+      if (timer?.pillar === p) {
+        timer = { ...timer, share_note: !!shareNote[p] };
+        await db.setState('timer', timer);
+        await publishLiveStatus();
+      }
+      await render();
     } else if (a === 'timer') {
       await toggleTimer(btn.dataset.pillar);
     } else if (a === 'weeknav') {
@@ -526,7 +583,12 @@ document.body.addEventListener('click', async ev => {
 document.body.addEventListener('input', ev => {
   const t = ev.target;
   if (t.id === 'winput') { day.win = t.value; queueSave(); }
-  else if (t.dataset.note !== undefined) { day.notes[t.dataset.note] = t.value; queueSave(); }
+  else if (t.dataset.note !== undefined) {
+    day.notes[t.dataset.note] = t.value; queueSave();
+    if (timer?.pillar === t.dataset.note && shareNote[t.dataset.note]) {
+      publishLiveStatus().catch(e => { showError(e); console.error(e); });
+    }
+  }
   else if (t.dataset.reflect !== undefined) { day.reflect[t.dataset.reflect] = t.value; queueSave(); }
   else if (t.id === 'm-progress') { $('#m-pct').textContent = t.value + '%'; }
 });
