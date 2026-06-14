@@ -38,6 +38,11 @@ function pillarName(key) {
   return key === 'refl' ? 'Reflection' : PILLARS.find(p => p.key === key).name;
 }
 
+function tagLabel(pillar, tagId) {
+  const p = PILLARS.find(x => x.key === pillar);
+  return p?.tags.find(([id]) => id === tagId)?.[1] || tagId;
+}
+
 function fmtLongDate(dateStr) {
   return new Date(dateStr + 'T00:00:00').toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
 }
@@ -497,6 +502,19 @@ async function publishLiveStatus() {
   });
 }
 
+async function friendsNowHtml() {
+  const rows = await db.getFriendLiveStatuses();
+  const active = rows.filter(r => r.is_tracking);
+  if (!active.length) return '';
+  return `<section class="card friends-now"><h2>Friends now</h2>
+    ${active.map(r => {
+      const p = PILLARS.find(x => x.key === r.pillar);
+      const tags = (r.tag_ids || []).map(id => tagLabel(r.pillar, id)).join(', ');
+      const note = r.shared_note ? ` - ${esc(r.shared_note)}` : '';
+      return `<div class="friend-row" style="--c:var(--${p?.key || 'green'})"><i></i><b>${esc(r.profiles?.display_name || 'Friend')}</b><span>${esc(p?.name || r.pillar)}${tags ? ` · ${esc(tags)}` : ''}${note}</span></div>`;
+    }).join('')}</section>`;
+}
+
 async function renderToday() {
   const rows = await db.getDays(S.addDays(today, -60), S.prevDate(today));
   const scoreByDate = {}, pointsByDate = {};
@@ -512,6 +530,7 @@ async function renderToday() {
   const monthScores = rows.filter(r => r.date.slice(0, 7) === today.slice(0, 7)).map(r => r.score).concat(score);
   const monthAvg = Math.round(monthScores.reduce((a, b) => a + b, 0) / monthScores.length);
   const statusLabel = { green: 'Green Day', yellow: 'Yellow Day', red: 'Red Day' }[status];
+  const friendsHtml = await friendsNowHtml();
 
   const missionHtml = mission && mission.title ? `
     <section class="mission">
@@ -528,6 +547,7 @@ async function renderToday() {
       <div class="streak">🔥 ${stk} <small>DAYS</small></div>
     </div>
     ${missionHtml}
+    ${friendsHtml}
     <section class="hero">
       <div class="ringwrap">
         <div class="ring" style="--p:${score};--rc:var(--${status})"></div>

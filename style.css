@@ -253,6 +253,12 @@ button.mlabel{text-decoration:underline dotted var(--faint);text-underline-offse
 .share-totals{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
 .share-totals span{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);border:1px solid var(--line);border-radius:99px;padding:6px 9px}
 .share-totals i{width:7px;height:7px;border-radius:50%;background:var(--c)}
+.friends-now{padding-bottom:10px}
+.friend-row{display:grid;grid-template-columns:10px auto 1fr;align-items:center;gap:9px;padding:8px 0;border-bottom:1px dashed var(--line);font-size:13px}
+.friend-row:last-child{border-bottom:0}
+.friend-row i{width:9px;height:9px;border-radius:50%;background:var(--c);box-shadow:0 0 12px color-mix(in srgb,var(--c) 55%,transparent)}
+.friend-row b{font-weight:700}
+.friend-row span{color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* ===== error banner ===== */
 .errbar{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:60;display:flex;gap:14px;align-items:center;
