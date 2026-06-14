@@ -77,6 +77,12 @@ begin
       end if;
     end if;
 
+    if not exists (select 1 from auth.users where id = legacy_owner_id) then
+      raise exception
+        'momentum.legacy_owner_id % does not match any auth.users.id. Set it to an existing user id before rerunning setup.sql.',
+        legacy_owner_id;
+    end if;
+
     update public.days set user_id = legacy_owner_id where user_id is null;
     update public.app_state set user_id = legacy_owner_id where user_id is null;
   end if;
@@ -207,6 +213,10 @@ end $$;
 -- rows should not keep granting friend visibility.
 drop policy if exists "profiles accepted friends read" on profiles;
 drop policy if exists "live_status accepted friends read" on live_status;
+drop policy if exists "friendships participant access" on friendships;
+drop policy if exists "friendships requester creates pending" on friendships;
+drop policy if exists "friendships participants read" on friendships;
+drop policy if exists "friendships participants delete" on friendships;
 
 -- Stop before trusting accepted rows that might have been created by older,
 -- weaker client-side friendship policies.
@@ -230,8 +240,6 @@ begin
   end if;
 end $$;
 
-comment on table friendships is 'momentum.accepted_friendships_audited=true';
-
 -- Stop with a clear message before the normalized pair index would fail.
 do $$
 declare
@@ -248,6 +256,18 @@ begin
   if duplicate_pair_count > 0 then
     raise exception
       'Duplicate or reversed friendship rows exist. Keep only one row for each user pair, delete the extra rows, then rerun setup.sql.';
+  end if;
+end $$;
+
+do $$
+declare
+  existing_comment text := obj_description('public.friendships'::regclass);
+begin
+  if coalesce(existing_comment, '') not like '%momentum.accepted_friendships_audited=true%' then
+    execute format(
+      'comment on table public.friendships is %L',
+      concat_ws(E'\n', nullif(existing_comment, ''), 'momentum.accepted_friendships_audited=true')
+    );
   end if;
 end $$;
 
@@ -299,11 +319,6 @@ create policy "activity_sessions owner access" on activity_sessions
   for all to authenticated
   using (user_id = auth.uid())
   with check (user_id = auth.uid());
-
-drop policy if exists "friendships participant access" on friendships;
-drop policy if exists "friendships requester creates pending" on friendships;
-drop policy if exists "friendships participants read" on friendships;
-drop policy if exists "friendships participants delete" on friendships;
 
 create policy "friendships requester creates pending" on friendships
   for insert to authenticated
