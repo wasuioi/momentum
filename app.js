@@ -334,9 +334,10 @@ async function stopTimer() {
   if (mins <= 0) return; // under a minute: nothing to bank
   const startDate = S.toDateStr(new Date(Date.parse(t.started_at)));
   let daySaved = false;
+  let retrySession = null;
   if (startDate === today) {
     const previousMinutes = day.minutes[t.pillar] || 0;
-    try {
+    const createSession = async () => {
       await db.createActivitySession({
         date: startDate,
         pillar: t.pillar,
@@ -346,13 +347,19 @@ async function stopTimer() {
         tag_ids: selectedTagsFor(t.pillar),
         note_snapshot: day.notes[t.pillar] || '',
       });
+    };
+    retrySession = createSession;
+    try {
       day.minutes[t.pillar] = previousMinutes + mins;
       await saveToday();
       daySaved = true;
+      await createSession();
     } catch (e) {
       if (!daySaved) {
         day.minutes[t.pillar] = previousMinutes;
         await restoreTimer();
+      } else {
+        lastFailed = retrySession;
       }
       throw e;
     }
@@ -361,26 +368,33 @@ async function stopTimer() {
     const saveMidnight = async () => {
       const row = await db.getDay(startDate);
       const d = row ? { ...emptyDay(), ...row.data } : emptyDay();
-      await db.createActivitySession({
-        date: startDate,
-        pillar: t.pillar,
-        started_at: t.started_at,
-        ended_at: endedAt,
-        minutes: mins,
-        tag_ids: d.tags?.[t.pillar] || [],
-        note_snapshot: d.notes?.[t.pillar] || day.notes[t.pillar] || '',
-      });
+      const createSession = async () => {
+        await db.createActivitySession({
+          date: startDate,
+          pillar: t.pillar,
+          started_at: t.started_at,
+          ended_at: endedAt,
+          minutes: mins,
+          tag_ids: d.tags?.[t.pillar] || [],
+          note_snapshot: d.notes?.[t.pillar] || day.notes[t.pillar] || '',
+        });
+      };
+      retrySession = createSession;
       d.minutes[t.pillar] = (d.minutes[t.pillar] || 0) + mins;
       d.points = S.dayPoints(d, targets);
       await db.saveDay(startDate, d, S.dayScore(d.points));
       daySaved = true;
+      await createSession();
     };
     try { await saveMidnight(); }
     catch (e) {
       if (!daySaved) {
         await restoreTimer();
+      } else {
+        lastFailed = retrySession;
       }
-      lastFailed = saveMidnight; showError(e); throw e;
+      if (!lastFailed) lastFailed = saveMidnight;
+      showError(e); throw e;
     }
   }
 }
