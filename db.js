@@ -104,8 +104,7 @@ export async function upsertProfile(displayName) {
 async function ensureProfile() {
   const session = await getSession();
   const userId = await requireUserId();
-  const fallbackName = session?.user?.email?.split('@')[0]?.trim() || 'Momentum user';
-  const displayName = session?.user?.user_metadata?.display_name?.trim() || fallbackName;
+  const displayName = session?.user?.user_metadata?.display_name?.trim() || 'Momentum user';
   const { error } = await sb.from('profiles')
     .upsert({ id: userId, display_name: displayName }, { onConflict: 'id', ignoreDuplicates: true });
   if (error) throw error;
