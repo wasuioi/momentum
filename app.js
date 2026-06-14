@@ -3,6 +3,8 @@
 
 import * as S from './score.js';
 import * as db from './db.js';
+import { sessionSegment, checkpointForPillar, totalSessionMinutes } from './timeline.js';
+import { syncCurrentDayState, checkpointMessage } from './app-state.js';
 
 const PILLARS = [
   { key: 'skill', name: 'Skill & Income', icon: '💰',
@@ -19,7 +21,9 @@ const PILLARS = [
 // ---- state ----
 let targets = { ...S.DEFAULT_TARGETS };
 let mission = null;             // {title, deadline, progress} | null
-let timer = null;               // {pillar, started_at} | null
+let profile = null;             // {display_name} | null
+let timer = null;               // {pillar, started_at, share_note?: boolean} | null
+let shareNote = {};             // per-pillar live note sharing for the current tracking context
 let today = S.toDateStr(new Date());
 let day = emptyDay();           // today's data (spec §5 shape)
 let weekOffset = 0;
@@ -34,6 +38,11 @@ function emptyDay() {
 
 function pillarName(key) {
   return key === 'refl' ? 'Reflection' : PILLARS.find(p => p.key === key).name;
+}
+
+function tagLabel(pillar, tagId) {
+  const p = PILLARS.find(x => x.key === pillar);
+  return p?.tags.find(([id]) => id === tagId)?.[1] || tagId;
 }
 
 function fmtLongDate(dateStr) {
@@ -59,13 +68,25 @@ async function saveToday() {
   catch (e) { lastFailed = saveToday; showError(e); throw e; }
 }
 
+async function saveDayData(date, data) {
+  data.points = S.dayPoints(data, targets);
+  try { await db.saveDay(date, data, S.dayScore(data.points)); hideError(); }
+  catch (e) { lastFailed = () => saveDayData(date, data); showError(e); throw e; }
+}
+
 // ---- boot ----
 async function boot() {
   const session = await db.getSession();
   if (!session) { $('#login').classList.remove('hidden'); $('#view').innerHTML = ''; return; }
+  profile = await db.getProfile();
+  if (!profile) {
+    await db.upsertProfile('Momentum User');
+    profile = await db.getProfile();
+  }
   targets = await db.getState('targets', { ...S.DEFAULT_TARGETS });
   mission = await db.getState('mission', null);
   timer = await db.getState('timer', null);
+  if (timer?.pillar) shareNote = { ...shareNote, [timer.pillar]: !!timer.share_note };
   await loadToday();
   window.addEventListener('hashchange', render);
   setInterval(tick, 1000);
@@ -84,14 +105,19 @@ $('#loginform').addEventListener('submit', async ev => {
 });
 
 // ---- routing ----
-function route() { return location.hash.replace('#', '') || 'today'; }
+function route() {
+  const h = location.hash.replace('#', '') || 'today';
+  if (h.startsWith('day/')) return { name: 'day', date: h.slice(4) };
+  return { name: h };
+}
 async function render() {
   const r = route();
-  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + r));
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + r.name));
   try {
-    if (r === 'week') await renderWeek();
-    else if (r === 'month') await renderMonth();
-    else if (r === 'settings') await renderSettings();
+    if (r.name === 'week') await renderWeek();
+    else if (r.name === 'month') await renderMonth();
+    else if (r.name === 'settings') await renderSettings();
+    else if (r.name === 'day') await renderDayDetail(r.date);
     else await renderToday();
   } catch (e) { showError(e); throw e; }
 }
@@ -113,7 +139,9 @@ async function renderWeek() {
     const r = byDate[d];
     const cls = r ? S.dayStatus(r.score) : 'off';
     return `<div class="day7"><em>${names[i]}</em>
-      <div class="dot ${cls} ${d === today ? 'today' : ''}">${r ? r.score : '·'}</div></div>`;
+      <a class="daylink" href="#day/${d}">
+        <div class="dot ${cls} ${d === today ? 'today' : ''}">${r ? r.score : '·'}</div>
+      </a></div>`;
   }).join('');
 
   const weekRows = dates.filter(d => byDate[d]).map(d => byDate[d]);
@@ -211,7 +239,9 @@ async function renderMonth() {
       cls += ' ' + (st === 'green' && r.score >= 90 ? 'green2' : st);
     }
     if (d === today) cls += ' today';
-    cells += `<div class="${cls}">${n}</div>`;
+    cells += d <= today
+      ? `<a class="${cls}" href="#day/${d}">${n}</a>`
+      : `<div class="${cls}">${n}</div>`;
   }
 
   // score line chart
@@ -279,6 +309,10 @@ async function renderSettings() {
   const m = mission || { title: '', deadline: '', progress: 0 };
   $('#view').innerHTML = `
     <div class="headrow"><div><h1>Settings</h1><p>Targets, mission, account</p></div></div>
+    <section class="card"><h2>Profile</h2>
+      <div class="set-row"><label>Display name</label>
+        <input type="text" id="display-name" value="${esc(profile?.display_name || '')}" placeholder="Your name"></div>
+    </section>
     <section class="card"><h2>Daily targets</h2>${tRows}</section>
     <section class="card"><h2>Current mission</h2>
       <div class="set-row"><label>Title</label>
@@ -304,36 +338,96 @@ async function toggleTimer(pillar) {
   try {
     if (timer && timer.pillar === pillar) { await stopTimer(); await render(); return; }
     if (timer) await stopTimer(); // switching pillars: bank the old one first
-    timer = { pillar, started_at: new Date().toISOString() };
+    timer = { pillar, started_at: new Date().toISOString(), share_note: false };
+    shareNote = { ...shareNote, [pillar]: false };
     await db.setState('timer', timer);
     await render();
+    await publishLiveStatus();
   } finally { timerBusy = false; }
 }
 
 async function stopTimer() {
   if (!timer) return;
-  const t = timer; timer = null;
-  // another device may have already stopped/replaced this timer — verify before banking
-  const dbTimer = await db.getState('timer', null);
-  if (!dbTimer || dbTimer.started_at !== t.started_at || dbTimer.pillar !== t.pillar) return;
-  await db.setState('timer', null);
+  const t = timer;
+  // another device may have already stopped/replaced this timer — claim before banking
+  const claimed = await db.claimTimer(t);
+  timer = null;
+  if (!claimed) return;
+  const restoreTimer = async () => {
+    timer = t;
+    await db.setState('timer', t);
+    await publishLiveStatus();
+  };
+  try { await publishLiveStatus(); }
+  catch (e) { await restoreTimer(); throw e; }
+
   const mins = S.elapsedMinutes(t.started_at, Date.now());
+  const endedAt = new Date().toISOString();
   if (mins <= 0) return; // under a minute: nothing to bank
   const startDate = S.toDateStr(new Date(Date.parse(t.started_at)));
+  let daySaved = false;
+  let retrySession = null;
   if (startDate === today) {
-    day.minutes[t.pillar] = (day.minutes[t.pillar] || 0) + mins;
-    await saveToday();
+    const previousMinutes = day.minutes[t.pillar] || 0;
+    const createSession = async () => {
+      await db.createActivitySession({
+        date: startDate,
+        pillar: t.pillar,
+        started_at: t.started_at,
+        ended_at: endedAt,
+        minutes: mins,
+        tag_ids: selectedTagsFor(t.pillar),
+        note_snapshot: day.notes[t.pillar] || '',
+      });
+    };
+    retrySession = createSession;
+    try {
+      day.minutes[t.pillar] = previousMinutes + mins;
+      await saveToday();
+      daySaved = true;
+      await createSession();
+    } catch (e) {
+      if (!daySaved) {
+        day.minutes[t.pillar] = previousMinutes;
+        await restoreTimer();
+      } else {
+        lastFailed = retrySession;
+      }
+      throw e;
+    }
   } else {
     // timer crossed midnight: credit the day it was started (spec §4)
     const saveMidnight = async () => {
       const row = await db.getDay(startDate);
       const d = row ? { ...emptyDay(), ...row.data } : emptyDay();
+      const createSession = async () => {
+        await db.createActivitySession({
+          date: startDate,
+          pillar: t.pillar,
+          started_at: t.started_at,
+          ended_at: endedAt,
+          minutes: mins,
+          tag_ids: d.tags?.[t.pillar] || [],
+          note_snapshot: d.notes?.[t.pillar] || day.notes[t.pillar] || '',
+        });
+      };
+      retrySession = createSession;
       d.minutes[t.pillar] = (d.minutes[t.pillar] || 0) + mins;
       d.points = S.dayPoints(d, targets);
       await db.saveDay(startDate, d, S.dayScore(d.points));
+      daySaved = true;
+      await createSession();
     };
     try { await saveMidnight(); }
-    catch (e) { lastFailed = saveMidnight; showError(e); throw e; }
+    catch (e) {
+      if (!daySaved) {
+        await restoreTimer();
+      } else {
+        lastFailed = retrySession;
+      }
+      if (!lastFailed) lastFailed = saveMidnight;
+      throw e;
+    }
   }
 }
 
@@ -372,6 +466,7 @@ function pillarCard(p, points) {
         : `<button class="mlabel" data-action="editmin" data-pillar="${p.key}" title="Tap to edit minutes">${mins}/${t}</button>`}
     </div>
     <input class="note" data-note="${p.key}" placeholder="What did you do? (optional)" value="${esc(day.notes[p.key])}">
+    ${running ? `<label class="share-note"><input type="checkbox" data-action="sharenote" data-pillar="${p.key}" ${shareNote[p.key] ? 'checked' : ''}> Share note with friends</label>` : ''}
   </article>`;
 }
 
@@ -397,6 +492,40 @@ function renderNavTimer() {
     <b>${p.icon} ${p.name}</b><span>TRACKING · CLICK TO STOP</span></button>`;
 }
 
+function selectedTagsFor(pillar) {
+  return day.tags[pillar] || [];
+}
+
+function sharedNoteFor(pillar) {
+  return shareNote[pillar] ? (day.notes[pillar] || '').trim() : '';
+}
+
+async function publishLiveStatus() {
+  if (!timer) {
+    await db.setLiveStatus({ is_tracking: false });
+    return;
+  }
+  await db.setLiveStatus({
+    is_tracking: true,
+    pillar: timer.pillar,
+    tag_ids: selectedTagsFor(timer.pillar),
+    shared_note: sharedNoteFor(timer.pillar),
+  });
+}
+
+async function friendsNowHtml() {
+  const rows = await db.getFriendLiveStatuses();
+  const active = rows.filter(r => r.is_tracking);
+  if (!active.length) return '';
+  return `<section class="card friends-now"><h2>Friends now</h2>
+    ${active.map(r => {
+      const p = PILLARS.find(x => x.key === r.pillar);
+      const tags = (r.tag_ids || []).map(id => tagLabel(r.pillar, id)).join(', ');
+      const note = r.shared_note ? ` - ${esc(r.shared_note)}` : '';
+      return `<div class="friend-row" style="--c:var(--${p?.key || 'green'})"><i></i><b>${esc(r.profiles?.display_name || 'Friend')}</b><span>${esc(p?.name || r.pillar)}${tags ? ` · ${esc(tags)}` : ''}${note}</span></div>`;
+    }).join('')}</section>`;
+}
+
 async function renderToday() {
   const rows = await db.getDays(S.addDays(today, -60), S.prevDate(today));
   const scoreByDate = {}, pointsByDate = {};
@@ -412,6 +541,7 @@ async function renderToday() {
   const monthScores = rows.filter(r => r.date.slice(0, 7) === today.slice(0, 7)).map(r => r.score).concat(score);
   const monthAvg = Math.round(monthScores.reduce((a, b) => a + b, 0) / monthScores.length);
   const statusLabel = { green: 'Green Day', yellow: 'Yellow Day', red: 'Red Day' }[status];
+  const friendsHtml = await friendsNowHtml();
 
   const missionHtml = mission && mission.title ? `
     <section class="mission">
@@ -428,6 +558,7 @@ async function renderToday() {
       <div class="streak">🔥 ${stk} <small>DAYS</small></div>
     </div>
     ${missionHtml}
+    ${friendsHtml}
     <section class="hero">
       <div class="ringwrap">
         <div class="ring" style="--p:${score};--rc:var(--${status})"></div>
@@ -464,6 +595,89 @@ async function renderToday() {
   renderNavTimer();
 }
 
+function fmtHours(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `${h}h ${m ? `${m}m` : ''}`.trim() : `${m}m`;
+}
+
+function timelineHtml(sessions, dayData) {
+  const ticks = ['00', '04', '08', '12', '16', '20'];
+  const tickHtml = `<div class="tl-ticks"><span></span>${ticks.map(t => `<span>${t}</span>`).join('')}</div>`;
+  const rows = PILLARS.map(p => {
+    const laneSessions = sessions.filter(s => s.pillar === p.key);
+    const bars = laneSessions.map(s => {
+      const seg = sessionSegment(s);
+      return `<i class="tl-bar" style="left:${seg.left}%;width:${seg.width}%;--c:var(--${p.key})"></i>`;
+    }).join('');
+    const checkpoint = checkpointForPillar(sessions, p.key, targets[p.key]);
+    const badge = checkpoint
+      ? `<button class="tl-badge" style="left:${checkpoint.left}%;--c:var(--${p.key})" title="${checkpointMessage(checkpoint.time)}" data-action="checkpoint" data-checkpoint="${checkpoint.time}">✓</button>`
+      : '';
+    const manual = Math.max(0, (dayData.minutes?.[p.key] || 0) - totalSessionMinutes(laneSessions));
+    return `<div class="tl-row"><b style="color:var(--${p.key})">${p.icon} ${p.name}</b><div class="tl-lane">${bars}${badge}</div>${manual ? `<em>+${manual}m manual</em>` : ''}</div>`;
+  }).join('');
+  return `<div class="timeline">${tickHtml}${rows}</div>`;
+}
+
+function shareSummaryHtml(date, data, sessions, score) {
+  const totals = PILLARS.map(p => ({
+    p,
+    mins: data.minutes?.[p.key] || 0,
+  })).filter(x => x.mins > 0);
+  return `
+    <section class="share-card">
+      <div class="share-top"><span>Momentum · ${date}</span><b>${score}</b></div>
+      ${timelineHtml(sessions, data)}
+      <div class="share-totals">
+        ${totals.map(({ p, mins }) => `<span style="--c:var(--${p.key})"><i></i>${p.name}: ${fmtHours(mins)}</span>`).join('')}
+      </div>
+    </section>`;
+}
+
+async function renderDayDetail(date) {
+  const row = await db.getDay(date);
+  const data = row ? { ...emptyDay(), ...row.data } : emptyDay();
+  const sessions = await db.getActivitySessions(date);
+  const points = S.dayPoints(data, targets);
+  const score = row?.score ?? S.dayScore(points);
+  const status = S.dayStatus(score);
+  const totalMins = Object.values(data.minutes || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+  $('#view').innerHTML = `
+    <div class="headrow">
+      <div><h1>${fmtLongDate(date)}</h1><p>Day journey</p></div>
+      <div class="streak">${score}<small>${status.toUpperCase()}</small></div>
+    </div>
+    <section class="card day-summary">
+      <h2>Summary</h2>
+      <div class="day-score"><b>${score}</b><span>${fmtHours(totalMins)} tracked + manual</span></div>
+    </section>
+    <section class="card">
+      <h2>Timeline</h2>
+      ${sessions.length ? timelineHtml(sessions, data) : '<p class="empty">Timeline starts after this feature was added.</p>'}
+    </section>
+    <section class="win">🏆
+      <div><label>BIGGEST WIN</label>
+        <input id="detail-win" data-detail-date="${date}" value="${esc(data.win)}" placeholder="What happened this day?"></div>
+    </section>
+    <section class="card">
+      <h2>Notes</h2>
+      ${PILLARS.map(p => `<input class="note" data-detail-note="${p.key}" data-detail-date="${date}" placeholder="${p.name} note" value="${esc(data.notes[p.key])}">`).join('')}
+    </section>
+    <section class="card">
+      <h2>Reflection</h2>
+      <div class="refl-qs">
+        <div><label>What went wrong?</label><textarea data-detail-reflect="wrong" data-detail-date="${date}" rows="2">${esc(data.reflect.wrong)}</textarea></div>
+        <div><label>One thing for tomorrow?</label><textarea data-detail-reflect="tomorrow" data-detail-date="${date}" rows="2">${esc(data.reflect.tomorrow)}</textarea></div>
+      </div>
+    </section>
+    <section class="card">
+      <button class="btn" data-action="shareday" data-date="${date}">Share preview</button>
+    </section>
+    ${timer ? trackNowHtml() : ''}`;
+  renderNavTimer();
+}
+
 // ---- per-second tick: live clocks + midnight rollover ----
 function tick() {
   const now = S.toDateStr(new Date());
@@ -491,7 +705,9 @@ document.body.addEventListener('click', async ev => {
       const arr = day.tags[pillar] || (day.tags[pillar] = []);
       const i = arr.indexOf(id);
       i >= 0 ? arr.splice(i, 1) : arr.push(id);
-      await saveToday(); await render();
+      await saveToday();
+      if (timer?.pillar === pillar) await publishLiveStatus();
+      await render();
     } else if (a === 'sleep') {
       day.sleep_ok = !day.sleep_ok;
       await saveToday(); await render();
@@ -503,8 +719,32 @@ document.body.addEventListener('click', async ev => {
       if (Number.isNaN(n) || n < 0) return;
       day.minutes[p] = n;
       await saveToday(); await render();
+    } else if (a === 'sharenote') {
+      const p = btn.dataset.pillar;
+      shareNote[p] = !shareNote[p];
+      if (timer?.pillar === p) {
+        timer = { ...timer, share_note: !!shareNote[p] };
+        await db.setState('timer', timer);
+        await publishLiveStatus();
+      }
+      await render();
     } else if (a === 'timer') {
       await toggleTimer(btn.dataset.pillar);
+    } else if (a === 'checkpoint') {
+      alert(checkpointMessage(btn.dataset.checkpoint));
+    } else if (a === 'shareday') {
+      const date = btn.dataset.date;
+      const row = await db.getDay(date);
+      const data = row ? { ...emptyDay(), ...row.data } : emptyDay();
+      const sessions = await db.getActivitySessions(date);
+      const score = row?.score ?? S.dayScore(S.dayPoints(data, targets));
+      $('#view').insertAdjacentHTML('beforeend', `<div class="share-wrap">${shareSummaryHtml(date, data, sessions, score)}<button class="btn" data-action="copyshare" data-date="${date}">Copy summary</button></div>`);
+    } else if (a === 'copyshare') {
+      const date = btn.dataset.date;
+      const row = await db.getDay(date);
+      const data = row ? { ...emptyDay(), ...row.data } : emptyDay();
+      const totals = PILLARS.map(p => `${p.name}: ${fmtHours(data.minutes?.[p.key] || 0)}`).join('\n');
+      await navigator.clipboard.writeText(`Momentum ${date}\nScore: ${row?.score ?? 0}\n${totals}`);
     } else if (a === 'weeknav') {
       weekOffset += Number(btn.dataset.dir); await render();
     } else if (a === 'monthnav') {
@@ -526,7 +766,12 @@ document.body.addEventListener('click', async ev => {
 document.body.addEventListener('input', ev => {
   const t = ev.target;
   if (t.id === 'winput') { day.win = t.value; queueSave(); }
-  else if (t.dataset.note !== undefined) { day.notes[t.dataset.note] = t.value; queueSave(); }
+  else if (t.dataset.note !== undefined) {
+    day.notes[t.dataset.note] = t.value; queueSave();
+    if (timer?.pillar === t.dataset.note && shareNote[t.dataset.note]) {
+      publishLiveStatus().catch(e => { showError(e); console.error(e); });
+    }
+  }
   else if (t.dataset.reflect !== undefined) { day.reflect[t.dataset.reflect] = t.value; queueSave(); }
   else if (t.id === 'm-progress') { $('#m-pct').textContent = t.value + '%'; }
 });
@@ -535,7 +780,19 @@ document.body.addEventListener('input', ev => {
 document.body.addEventListener('change', async ev => {
   const t = ev.target;
   try {
-    if (t.id === 'winput' || t.dataset.note !== undefined || t.dataset.reflect !== undefined) {
+    if (t.id === 'detail-win' || t.dataset.detailNote !== undefined || t.dataset.detailReflect !== undefined) {
+      const date = t.dataset.detailDate;
+      const row = await db.getDay(date);
+      const data = row ? { ...emptyDay(), ...row.data } : emptyDay();
+      if (t.id === 'detail-win') data.win = t.value;
+      else if (t.dataset.detailNote !== undefined) data.notes[t.dataset.detailNote] = t.value;
+      else data.reflect[t.dataset.detailReflect] = t.value;
+      await saveDayData(date, data);
+      day = syncCurrentDayState(today, day, date, data);
+    } else if (t.id === 'display-name') {
+      await db.upsertProfile(t.value.trim() || 'Momentum User');
+      profile = await db.getProfile();
+    } else if (t.id === 'winput' || t.dataset.note !== undefined || t.dataset.reflect !== undefined) {
       await render();
     } else if (t.dataset.target !== undefined) {
       const n = parseInt(t.value, 10);
