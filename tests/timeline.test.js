@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import {
   sessionMinutes,
   localDateFromIso,
@@ -16,6 +18,21 @@ test('sessionMinutes floors partial minutes and clamps skew', () => {
 
 test('localDateFromIso returns the local date string for the timestamp', () => {
   assert.equal(localDateFromIso('2026-06-14T10:00:00Z'), '2026-06-14');
+});
+
+test('localDateFromIso uses local timezone near midnight', () => {
+  const cwd = fileURLToPath(new URL('..', import.meta.url));
+  const text = execFileSync(process.execPath, [
+    '--input-type=module',
+    '-e',
+    "import { localDateFromIso } from './timeline.js'; console.log(localDateFromIso('2026-06-14T20:00:00Z'));",
+  ], {
+    cwd,
+    encoding: 'utf8',
+    env: { ...process.env, TZ: 'Asia/Bangkok' },
+  }).trim();
+
+  assert.equal(text, '2026-06-15');
 });
 
 test('clockTime renders local HH:MM', () => {
@@ -49,11 +66,20 @@ test('totalSessionMinutes sums only real timer sessions', () => {
   ]), 75);
 });
 
+test('totalSessionMinutes ignores invalid or negative minutes', () => {
+  assert.equal(totalSessionMinutes([
+    { minutes: 30 },
+    { minutes: -10 },
+    { minutes: '20' },
+    {},
+  ]), 30);
+});
+
 test('checkpointForPillar returns first real session crossing target', () => {
   const sessions = [
-    { id: 'a', pillar: 'skill', started_at: '2026-06-14T08:00:00', ended_at: '2026-06-14T09:30:00', minutes: 90 },
     { id: 'b', pillar: 'skill', started_at: '2026-06-14T10:00:00', ended_at: '2026-06-14T12:30:00', minutes: 150 },
     { id: 'c', pillar: 'skill', started_at: '2026-06-14T13:00:00', ended_at: '2026-06-14T14:00:00', minutes: 60 },
+    { id: 'a', pillar: 'skill', started_at: '2026-06-14T08:00:00', ended_at: '2026-06-14T09:30:00', minutes: 90 },
   ];
   assert.deepEqual(checkpointForPillar(sessions, 'skill', 240), {
     sessionId: 'b',
@@ -78,6 +104,13 @@ test('checkpointForPillar places badge inside the crossing session', () => {
 
 test('checkpointForPillar returns null when manual minutes hit target without sessions', () => {
   assert.equal(checkpointForPillar([], 'skill', 240), null);
+});
+
+test('checkpointForPillar returns null when crossing happens outside visible day', () => {
+  const sessions = [
+    { id: 'a', pillar: 'mind', started_at: '2026-06-14T23:00:00', ended_at: '2026-06-15T01:00:00', minutes: 120 },
+  ];
+  assert.equal(checkpointForPillar(sessions, 'mind', 90), null);
 });
 
 test('checkpointForPillar returns null when sessions never reach target', () => {

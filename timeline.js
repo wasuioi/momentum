@@ -20,6 +20,10 @@ function localIsoMinute(ms) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}T${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:00.000`;
 }
 
+function validMinutes(minutes) {
+  return Number.isFinite(minutes) && minutes > 0 ? minutes : 0;
+}
+
 export function sessionMinutes(startedAtIso, endedAtIso) {
   return Math.max(0, Math.floor((localDateTimeMs(endedAtIso) - localDateTimeMs(startedAtIso)) / 60000));
 }
@@ -44,22 +48,25 @@ export function sessionSegment(session) {
 }
 
 export function totalSessionMinutes(sessions) {
-  return sessions.reduce((sum, s) => sum + (s.minutes || 0), 0);
+  return sessions.reduce((sum, s) => sum + validMinutes(s.minutes), 0);
 }
 
 export function checkpointForPillar(sessions, pillar, targetMinutes) {
   let total = 0;
   const sorted = sessions
-    .filter(s => s.pillar === pillar && (s.minutes || 0) > 0)
+    .filter(s => s.pillar === pillar && validMinutes(s.minutes) > 0)
     .sort((a, b) => localDateTimeMs(a.started_at) - localDateTimeMs(b.started_at));
 
   for (const session of sorted) {
-    const next = total + session.minutes;
+    const minutes = validMinutes(session.minutes);
+    const next = total + minutes;
     if (total < targetMinutes && next >= targetMinutes) {
       const offsetMinutes = targetMinutes - total;
       const atMs = localDateTimeMs(session.started_at) + offsetMinutes * 60000;
       const at = localIsoMinute(atMs);
       const dayStart = localDayStartMs(session.started_at);
+      const dayEnd = dayStart + MINUTES_PER_DAY * 60000;
+      if (atMs > dayEnd) return null;
       return {
         sessionId: session.id,
         at,
