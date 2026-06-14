@@ -3,6 +3,7 @@
 
 import * as S from './score.js';
 import * as db from './db.js';
+import { sessionSegment, checkpointForPillar, totalSessionMinutes } from './timeline.js';
 
 const PILLARS = [
   { key: 'skill', name: 'Skill & Income', icon: '💰',
@@ -60,6 +61,12 @@ async function saveToday() {
   catch (e) { lastFailed = saveToday; showError(e); throw e; }
 }
 
+async function saveDayData(date, data) {
+  data.points = S.dayPoints(data, targets);
+  try { await db.saveDay(date, data, S.dayScore(data.points)); hideError(); }
+  catch (e) { lastFailed = () => saveDayData(date, data); showError(e); throw e; }
+}
+
 // ---- boot ----
 async function boot() {
   const session = await db.getSession();
@@ -86,14 +93,19 @@ $('#loginform').addEventListener('submit', async ev => {
 });
 
 // ---- routing ----
-function route() { return location.hash.replace('#', '') || 'today'; }
+function route() {
+  const h = location.hash.replace('#', '') || 'today';
+  if (h.startsWith('day/')) return { name: 'day', date: h.slice(4) };
+  return { name: h };
+}
 async function render() {
   const r = route();
-  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + r));
+  document.querySelectorAll('#nav a').forEach(a => a.classList.toggle('on', a.getAttribute('href') === '#' + r.name));
   try {
-    if (r === 'week') await renderWeek();
-    else if (r === 'month') await renderMonth();
-    else if (r === 'settings') await renderSettings();
+    if (r.name === 'week') await renderWeek();
+    else if (r.name === 'month') await renderMonth();
+    else if (r.name === 'settings') await renderSettings();
+    else if (r.name === 'day') await renderDayDetail(r.date);
     else await renderToday();
   } catch (e) { showError(e); throw e; }
 }
@@ -115,7 +127,9 @@ async function renderWeek() {
     const r = byDate[d];
     const cls = r ? S.dayStatus(r.score) : 'off';
     return `<div class="day7"><em>${names[i]}</em>
-      <div class="dot ${cls} ${d === today ? 'today' : ''}">${r ? r.score : '·'}</div></div>`;
+      <a class="daylink" href="#day/${d}">
+        <div class="dot ${cls} ${d === today ? 'today' : ''}">${r ? r.score : '·'}</div>
+      </a></div>`;
   }).join('');
 
   const weekRows = dates.filter(d => byDate[d]).map(d => byDate[d]);
@@ -213,7 +227,9 @@ async function renderMonth() {
       cls += ' ' + (st === 'green' && r.score >= 90 ? 'green2' : st);
     }
     if (d === today) cls += ' today';
-    cells += `<div class="${cls}">${n}</div>`;
+    cells += d <= today
+      ? `<a class="${cls}" href="#day/${d}">${n}</a>`
+      : `<div class="${cls}">${n}</div>`;
   }
 
   // score line chart
@@ -548,6 +564,74 @@ async function renderToday() {
   renderNavTimer();
 }
 
+function fmtHours(mins) {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  return h ? `${h}h ${m ? `${m}m` : ''}`.trim() : `${m}m`;
+}
+
+function timelineHtml(sessions, dayData) {
+  const ticks = ['00', '04', '08', '12', '16', '20'];
+  const tickHtml = `<div class="tl-ticks"><span></span>${ticks.map(t => `<span>${t}</span>`).join('')}</div>`;
+  const rows = PILLARS.map(p => {
+    const laneSessions = sessions.filter(s => s.pillar === p.key);
+    const bars = laneSessions.map(s => {
+      const seg = sessionSegment(s);
+      return `<i class="tl-bar" style="left:${seg.left}%;width:${seg.width}%;--c:var(--${p.key})"></i>`;
+    }).join('');
+    const checkpoint = checkpointForPillar(sessions, p.key, targets[p.key]);
+    const badge = checkpoint
+      ? `<button class="tl-badge" style="left:${checkpoint.left}%;--c:var(--${p.key})" title="Target reached at ${checkpoint.time}" data-checkpoint="${checkpoint.time}">✓</button>`
+      : '';
+    const manual = Math.max(0, (dayData.minutes?.[p.key] || 0) - totalSessionMinutes(laneSessions));
+    return `<div class="tl-row"><b style="color:var(--${p.key})">${p.icon} ${p.name}</b><div class="tl-lane">${bars}${badge}</div>${manual ? `<em>+${manual}m manual</em>` : ''}</div>`;
+  }).join('');
+  return `<div class="timeline">${tickHtml}${rows}</div>`;
+}
+
+async function renderDayDetail(date) {
+  const row = await db.getDay(date);
+  const data = row ? { ...emptyDay(), ...row.data } : emptyDay();
+  const sessions = await db.getActivitySessions(date);
+  const points = S.dayPoints(data, targets);
+  const score = row?.score ?? S.dayScore(points);
+  const status = S.dayStatus(score);
+  const totalMins = Object.values(data.minutes || {}).reduce((a, b) => a + (Number(b) || 0), 0);
+  $('#view').innerHTML = `
+    <div class="headrow">
+      <div><h1>${fmtLongDate(date)}</h1><p>Day journey</p></div>
+      <div class="streak">${score}<small>${status.toUpperCase()}</small></div>
+    </div>
+    <section class="card day-summary">
+      <h2>Summary</h2>
+      <div class="day-score"><b>${score}</b><span>${fmtHours(totalMins)} tracked + manual</span></div>
+    </section>
+    <section class="card">
+      <h2>Timeline</h2>
+      ${sessions.length ? timelineHtml(sessions, data) : '<p class="empty">Timeline starts after this feature was added.</p>'}
+    </section>
+    <section class="win">🏆
+      <div><label>BIGGEST WIN</label>
+        <input id="detail-win" data-detail-date="${date}" value="${esc(data.win)}" placeholder="What happened this day?"></div>
+    </section>
+    <section class="card">
+      <h2>Notes</h2>
+      ${PILLARS.map(p => `<input class="note" data-detail-note="${p.key}" data-detail-date="${date}" placeholder="${p.name} note" value="${esc(data.notes[p.key])}">`).join('')}
+    </section>
+    <section class="card">
+      <h2>Reflection</h2>
+      <div class="refl-qs">
+        <div><label>What went wrong?</label><textarea data-detail-reflect="wrong" data-detail-date="${date}" rows="2">${esc(data.reflect.wrong)}</textarea></div>
+        <div><label>One thing for tomorrow?</label><textarea data-detail-reflect="tomorrow" data-detail-date="${date}" rows="2">${esc(data.reflect.tomorrow)}</textarea></div>
+      </div>
+    </section>
+    <section class="card">
+      <button class="btn" data-action="shareday" data-date="${date}">Share preview</button>
+    </section>
+    ${timer ? trackNowHtml() : ''}`;
+  renderNavTimer();
+}
+
 // ---- per-second tick: live clocks + midnight rollover ----
 function tick() {
   const now = S.toDateStr(new Date());
@@ -635,7 +719,15 @@ document.body.addEventListener('input', ev => {
 document.body.addEventListener('change', async ev => {
   const t = ev.target;
   try {
-    if (t.id === 'winput' || t.dataset.note !== undefined || t.dataset.reflect !== undefined) {
+    if (t.id === 'detail-win' || t.dataset.detailNote !== undefined || t.dataset.detailReflect !== undefined) {
+      const date = t.dataset.detailDate;
+      const row = await db.getDay(date);
+      const data = row ? { ...emptyDay(), ...row.data } : emptyDay();
+      if (t.id === 'detail-win') data.win = t.value;
+      else if (t.dataset.detailNote !== undefined) data.notes[t.dataset.detailNote] = t.value;
+      else data.reflect[t.dataset.detailReflect] = t.value;
+      await saveDayData(date, data);
+    } else if (t.id === 'winput' || t.dataset.note !== undefined || t.dataset.reflect !== undefined) {
       await render();
     } else if (t.dataset.target !== undefined) {
       const n = parseInt(t.value, 10);
