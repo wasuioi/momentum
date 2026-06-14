@@ -589,6 +589,21 @@ function timelineHtml(sessions, dayData) {
   return `<div class="timeline">${tickHtml}${rows}</div>`;
 }
 
+function shareSummaryHtml(date, data, sessions, score) {
+  const totals = PILLARS.map(p => ({
+    p,
+    mins: data.minutes?.[p.key] || 0,
+  })).filter(x => x.mins > 0);
+  return `
+    <section class="share-card">
+      <div class="share-top"><span>Momentum · ${date}</span><b>${score}</b></div>
+      ${timelineHtml(sessions, data)}
+      <div class="share-totals">
+        ${totals.map(({ p, mins }) => `<span style="--c:var(--${p.key})"><i></i>${p.name}: ${fmtHours(mins)}</span>`).join('')}
+      </div>
+    </section>`;
+}
+
 async function renderDayDetail(date) {
   const row = await db.getDay(date);
   const data = row ? { ...emptyDay(), ...row.data } : emptyDay();
@@ -684,6 +699,19 @@ document.body.addEventListener('click', async ev => {
       await render();
     } else if (a === 'timer') {
       await toggleTimer(btn.dataset.pillar);
+    } else if (a === 'shareday') {
+      const date = btn.dataset.date;
+      const row = await db.getDay(date);
+      const data = row ? { ...emptyDay(), ...row.data } : emptyDay();
+      const sessions = await db.getActivitySessions(date);
+      const score = row?.score ?? S.dayScore(S.dayPoints(data, targets));
+      $('#view').insertAdjacentHTML('beforeend', `<div class="share-wrap">${shareSummaryHtml(date, data, sessions, score)}<button class="btn" data-action="copyshare" data-date="${date}">Copy summary</button></div>`);
+    } else if (a === 'copyshare') {
+      const date = btn.dataset.date;
+      const row = await db.getDay(date);
+      const data = row ? { ...emptyDay(), ...row.data } : emptyDay();
+      const totals = PILLARS.map(p => `${p.name}: ${fmtHours(data.minutes?.[p.key] || 0)}`).join('\n');
+      await navigator.clipboard.writeText(`Momentum ${date}\nScore: ${row?.score ?? 0}\n${totals}`);
     } else if (a === 'weeknav') {
       weekOffset += Number(btn.dataset.dir); await render();
     } else if (a === 'monthnav') {
