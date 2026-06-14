@@ -116,6 +116,13 @@ export async function upsertProfile(displayName) {
   if (error) throw error;
 }
 
+export async function getProfile() {
+  const userId = await requireUserId();
+  const { data, error } = await sb.from('profiles').select('*').eq('id', userId).maybeSingle();
+  if (error) throw error;
+  return data;
+}
+
 async function ensureProfile() {
   const session = await getSession();
   const userId = await requireUserId();

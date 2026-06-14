@@ -20,6 +20,7 @@ const PILLARS = [
 // ---- state ----
 let targets = { ...S.DEFAULT_TARGETS };
 let mission = null;             // {title, deadline, progress} | null
+let profile = null;             // {display_name} | null
 let timer = null;               // {pillar, started_at, share_note?: boolean} | null
 let shareNote = {};             // per-pillar live note sharing for the current tracking context
 let today = S.toDateStr(new Date());
@@ -76,6 +77,11 @@ async function saveDayData(date, data) {
 async function boot() {
   const session = await db.getSession();
   if (!session) { $('#login').classList.remove('hidden'); $('#view').innerHTML = ''; return; }
+  profile = await db.getProfile();
+  if (!profile) {
+    await db.upsertProfile('Momentum User');
+    profile = await db.getProfile();
+  }
   targets = await db.getState('targets', { ...S.DEFAULT_TARGETS });
   mission = await db.getState('mission', null);
   timer = await db.getState('timer', null);
@@ -302,6 +308,10 @@ async function renderSettings() {
   const m = mission || { title: '', deadline: '', progress: 0 };
   $('#view').innerHTML = `
     <div class="headrow"><div><h1>Settings</h1><p>Targets, mission, account</p></div></div>
+    <section class="card"><h2>Profile</h2>
+      <div class="set-row"><label>Display name</label>
+        <input type="text" id="display-name" value="${esc(profile?.display_name || '')}" placeholder="Your name"></div>
+    </section>
     <section class="card"><h2>Daily targets</h2>${tRows}</section>
     <section class="card"><h2>Current mission</h2>
       <div class="set-row"><label>Title</label>
@@ -775,6 +785,9 @@ document.body.addEventListener('change', async ev => {
       else if (t.dataset.detailNote !== undefined) data.notes[t.dataset.detailNote] = t.value;
       else data.reflect[t.dataset.detailReflect] = t.value;
       await saveDayData(date, data);
+    } else if (t.id === 'display-name') {
+      await db.upsertProfile(t.value.trim() || 'Momentum User');
+      profile = await db.getProfile();
     } else if (t.id === 'winput' || t.dataset.note !== undefined || t.dataset.reflect !== undefined) {
       await render();
     } else if (t.dataset.target !== undefined) {
