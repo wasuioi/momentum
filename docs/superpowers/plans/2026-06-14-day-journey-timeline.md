@@ -14,28 +14,28 @@
 
 ## File Structure
 
-- Modify: `setup.sql`  
+- Modify: `setup.sql`
   Owns schema and RLS. Replace single-user tables/policies with multi-user-safe tables: `profiles`, owner-scoped `days`, owner-scoped `app_state`, `activity_sessions`, `friendships`, and `live_status`.
 
-- Modify: `db.js`  
+- Modify: `db.js`
   Owns Supabase access. Add authenticated user helpers, owner-scoped reads/writes, session APIs, profile/live-status APIs, and export updates. Every function throws on error.
 
-- Modify: `score.js`  
+- Modify: `score.js`
   Keep existing score helpers. Add small date/session helpers only if they are general scoring/time helpers.
 
-- Create: `timeline.js`  
+- Create: `timeline.js`
   Pure timeline logic: session duration normalization, activity-lane positions, checkpoint calculation, time formatting.
 
-- Create: `tests/timeline.test.js`  
+- Create: `tests/timeline.test.js`
   Unit tests for timeline/checkpoint behavior.
 
-- Modify: `app.js`  
+- Modify: `app.js`
   Add day-detail route, session-aware timer stop/start, live status updates, per-pillar note-sharing toggle, friends-now section, editable old-day notes, and share preview rendering.
 
-- Modify: `style.css`  
+- Modify: `style.css`
   Add minimal timeline, check badge, day detail, friends-now, and share-card styles.
 
-- Modify: `tests/score.test.js`  
+- Modify: `tests/score.test.js`
   Only if a helper lands in `score.js`; prefer new timeline tests in `tests/timeline.test.js`.
 
 ---

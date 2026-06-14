@@ -10,6 +10,7 @@ import {
   checkpointForPillar,
   totalSessionMinutes,
 } from '../timeline.js';
+import { syncCurrentDayState, checkpointMessage } from '../app-state.js';
 
 test('sessionMinutes floors partial minutes and clamps skew', () => {
   assert.equal(sessionMinutes('2026-06-14T10:00:00Z', '2026-06-14T11:23:59Z'), 83);
@@ -118,4 +119,22 @@ test('checkpointForPillar returns null when sessions never reach target', () => 
     { id: 'a', pillar: 'health', started_at: '2026-06-14T20:00:00', ended_at: '2026-06-14T20:45:00', minutes: 45 },
   ];
   assert.equal(checkpointForPillar(sessions, 'health', 60), null);
+});
+
+test('syncCurrentDayState replaces in-memory today after editing today detail', () => {
+  const current = { minutes: { skill: 10 }, notes: { skill: 'old' } };
+  const edited = { minutes: { skill: 20 }, notes: { skill: 'new' } };
+
+  assert.deepEqual(syncCurrentDayState('2026-06-14', current, '2026-06-14', edited), edited);
+});
+
+test('syncCurrentDayState leaves today unchanged after editing another date', () => {
+  const current = { minutes: { skill: 10 }, notes: { skill: 'today' } };
+  const edited = { minutes: { skill: 20 }, notes: { skill: 'past' } };
+
+  assert.equal(syncCurrentDayState('2026-06-14', current, '2026-06-13', edited), current);
+});
+
+test('checkpointMessage names the reached target time', () => {
+  assert.equal(checkpointMessage('13:42'), 'Target reached at 13:42');
 });

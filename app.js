@@ -4,6 +4,7 @@
 import * as S from './score.js';
 import * as db from './db.js';
 import { sessionSegment, checkpointForPillar, totalSessionMinutes } from './timeline.js';
+import { syncCurrentDayState, checkpointMessage } from './app-state.js';
 
 const PILLARS = [
   { key: 'skill', name: 'Skill & Income', icon: '💰',
@@ -611,7 +612,7 @@ function timelineHtml(sessions, dayData) {
     }).join('');
     const checkpoint = checkpointForPillar(sessions, p.key, targets[p.key]);
     const badge = checkpoint
-      ? `<button class="tl-badge" style="left:${checkpoint.left}%;--c:var(--${p.key})" title="Target reached at ${checkpoint.time}" data-checkpoint="${checkpoint.time}">✓</button>`
+      ? `<button class="tl-badge" style="left:${checkpoint.left}%;--c:var(--${p.key})" title="${checkpointMessage(checkpoint.time)}" data-action="checkpoint" data-checkpoint="${checkpoint.time}">✓</button>`
       : '';
     const manual = Math.max(0, (dayData.minutes?.[p.key] || 0) - totalSessionMinutes(laneSessions));
     return `<div class="tl-row"><b style="color:var(--${p.key})">${p.icon} ${p.name}</b><div class="tl-lane">${bars}${badge}</div>${manual ? `<em>+${manual}m manual</em>` : ''}</div>`;
@@ -729,6 +730,8 @@ document.body.addEventListener('click', async ev => {
       await render();
     } else if (a === 'timer') {
       await toggleTimer(btn.dataset.pillar);
+    } else if (a === 'checkpoint') {
+      alert(checkpointMessage(btn.dataset.checkpoint));
     } else if (a === 'shareday') {
       const date = btn.dataset.date;
       const row = await db.getDay(date);
@@ -785,6 +788,7 @@ document.body.addEventListener('change', async ev => {
       else if (t.dataset.detailNote !== undefined) data.notes[t.dataset.detailNote] = t.value;
       else data.reflect[t.dataset.detailReflect] = t.value;
       await saveDayData(date, data);
+      day = syncCurrentDayState(today, day, date, data);
     } else if (t.id === 'display-name') {
       await db.upsertProfile(t.value.trim() || 'Momentum User');
       profile = await db.getProfile();
