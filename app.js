@@ -394,7 +394,7 @@ async function stopTimer() {
         lastFailed = retrySession;
       }
       if (!lastFailed) lastFailed = saveMidnight;
-      showError(e); throw e;
+      throw e;
     }
   }
 }
