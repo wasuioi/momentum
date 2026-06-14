@@ -8,6 +8,10 @@ export const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let cachedUserId = null;
 
+sb.auth.onAuthStateChange((_event, session) => {
+  cachedUserId = session?.user?.id ?? null;
+});
+
 export async function requireUserId() {
   if (cachedUserId) return cachedUserId;
   const session = await getSession();
@@ -24,8 +28,9 @@ export async function getSession() {
 
 export async function signIn(email, password) {
   cachedUserId = null;
-  const { error } = await sb.auth.signInWithPassword({ email, password });
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
   if (error) throw error;
+  cachedUserId = data.user?.id ?? data.session?.user?.id ?? null;
 }
 
 export async function signOut() {
@@ -53,7 +58,10 @@ export async function getDays(from, to) {
 export async function saveDay(date, dayData, score) {
   const userId = await requireUserId();
   const { error } = await sb.from('days')
-    .upsert({ user_id: userId, date, data: dayData, score, updated_at: new Date().toISOString() });
+    .upsert(
+      { user_id: userId, date, data: dayData, score, updated_at: new Date().toISOString() },
+      { onConflict: 'user_id,date' }
+    );
   if (error) throw error;
 }
 
@@ -67,7 +75,8 @@ export async function getState(key, fallback) {
 
 export async function setState(key, value) {
   const userId = await requireUserId();
-  const { error } = await sb.from('app_state').upsert({ user_id: userId, key, value });
+  const { error } = await sb.from('app_state')
+    .upsert({ user_id: userId, key, value }, { onConflict: 'user_id,key' });
   if (error) throw error;
 }
 
@@ -87,11 +96,23 @@ export async function createActivitySession(session) {
 
 export async function upsertProfile(displayName) {
   const userId = await requireUserId();
-  const { error } = await sb.from('profiles').upsert({ id: userId, display_name: displayName });
+  const { error } = await sb.from('profiles')
+    .upsert({ id: userId, display_name: displayName }, { onConflict: 'id' });
+  if (error) throw error;
+}
+
+async function ensureProfile() {
+  const session = await getSession();
+  const userId = await requireUserId();
+  const fallbackName = session?.user?.email?.split('@')[0]?.trim() || 'Momentum user';
+  const displayName = session?.user?.user_metadata?.display_name?.trim() || fallbackName;
+  const { error } = await sb.from('profiles')
+    .upsert({ id: userId, display_name: displayName }, { onConflict: 'id', ignoreDuplicates: true });
   if (error) throw error;
 }
 
 export async function setLiveStatus(status) {
+  await ensureProfile();
   const userId = await requireUserId();
   const { error } = await sb.from('live_status').upsert({
     user_id: userId,
@@ -100,15 +121,16 @@ export async function setLiveStatus(status) {
     shared_note: status.shared_note ?? '',
     is_tracking: !!status.is_tracking,
     updated_at: new Date().toISOString(),
-  });
+  }, { onConflict: 'user_id' });
   if (error) throw error;
 }
 
 export async function getFriendLiveStatuses() {
-  await requireUserId();
+  const userId = await requireUserId();
   const { data, error } = await sb.from('live_status')
     .select('user_id,pillar,tag_ids,shared_note,is_tracking,updated_at,profiles:user_id(display_name)')
     .eq('is_tracking', true)
+    .neq('user_id', userId)
     .order('updated_at', { ascending: false });
   if (error) throw error;
   return data;
