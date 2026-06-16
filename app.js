@@ -23,6 +23,8 @@ let targets = { ...S.DEFAULT_TARGETS };
 let mission = null;             // {title, deadline, progress} | null
 let profile = null;             // {display_name} | null
 let timer = null;               // {pillar, started_at, share_note?: boolean} | null
+let recovery = { version: 1, active: null, history: [] };
+let recoveryBusy = false; // guards the expiry re-render in tick()
 let shareNote = {};             // per-pillar live note sharing for the current tracking context
 let today = S.toDateStr(new Date());
 let day = emptyDay();           // today's data (spec §5 shape)
@@ -87,7 +89,9 @@ async function boot() {
   mission = await db.getState('mission', null);
   timer = await db.getState('timer', null);
   if (timer?.pillar) shareNote = { ...shareNote, [timer.pillar]: !!timer.share_note };
+  recovery = await db.getRecovery();
   await loadToday();
+  await syncRecovery(await buildScoreByDate()); // catch banner/modal regardless of landing view
   window.addEventListener('hashchange', render);
   setInterval(tick, 1000);
   await render();
@@ -148,7 +152,9 @@ async function renderWeek() {
   const avg = weekRows.length ? Math.round(weekRows.reduce((a, r) => a + r.score, 0) / weekRows.length) : 0;
   const greens = weekRows.filter(r => r.score >= 80).length;
   const scoreByDate = {}; for (const r of rows) scoreByDate[r.date] = r.score;
-  const stk = S.streak(scoreByDate, today);
+  const forgiven = S.forgivenSet(recovery.history, scoreByDate);
+  const stk = S.streak(scoreByDate, today, forgiven);
+  const wkMarker = recoveryMarker(scoreByDate, forgiven);
 
   const hours = PILLARS.map(p => ({
     p, mins: weekRows.reduce((a, r) => a + (r.data.minutes?.[p.key] ?? 0), 0),
@@ -180,7 +186,7 @@ async function renderWeek() {
     <div class="stats3">
       <div class="stat3"><b>${avg}<small> avg</small></b><span>WEEK SCORE</span></div>
       <div class="stat3"><b>${greens}<small> /${weekRows.length}</small></b><span>GREEN DAYS</span></div>
-      <div class="stat3"><b>🔥 ${stk}</b><span>STREAK</span></div>
+      <div class="stat3"><b>🔥 ${stk}${wkMarker}</b><span>STREAK</span></div>
     </div>
     <section class="card"><h2>Hours by pillar</h2>${bars}</section>
     <section class="card"><h2>Insight</h2><div class="insight">✨<p>${insight}</p></div></section>
@@ -526,6 +532,38 @@ async function friendsNowHtml() {
     }).join('')}</section>`;
 }
 
+// last 60 days of scores + today's live score (same window the Today/Week views use)
+async function buildScoreByDate() {
+  const rows = await db.getDays(S.addDays(today, -60), S.prevDate(today));
+  const scoreByDate = {};
+  for (const r of rows) scoreByDate[r.date] = r.score;
+  scoreByDate[today] = S.dayScore(S.dayPoints(day, targets));
+  return scoreByDate;
+}
+
+// Reload-and-confirm guard (spec §8): always evaluate against the freshest stored state,
+// persist only on a real transition, then surface the one-shot modal.
+async function syncRecovery(scoreByDate) {
+  const latest = await db.getRecovery();
+  const res = S.evaluateRecovery(latest, scoreByDate, today, Date.now());
+  if (res.changed) await db.setRecovery(res.next);
+  recovery = res.next;
+  if (res.event === 'success') {
+    const forgiven = S.forgivenSet(recovery.history, scoreByDate);
+    showRecoveryModal('success', { streak: S.streak(scoreByDate, today, forgiven) });
+  } else if (res.event === 'failure') {
+    showRecoveryModal('failure', {});
+  }
+  return res;
+}
+
+// a single ⭐ when the current live streak bridges at least one forgiven break (never ⭐×N)
+function recoveryMarker(scoreByDate, forgiven) {
+  const withF = S.streak(scoreByDate, today, forgiven);
+  const without = S.streak(scoreByDate, today);
+  return withF > 0 && withF > without ? ' ⭐' : '';
+}
+
 async function renderToday() {
   const rows = await db.getDays(S.addDays(today, -60), S.prevDate(today));
   const scoreByDate = {}, pointsByDate = {};
@@ -535,8 +573,11 @@ async function renderToday() {
   const score = S.dayScore(points);
   const status = S.dayStatus(score);
   scoreByDate[today] = score;
-  const stk = S.streak(scoreByDate, today);
-  const best = S.bestStreak(scoreByDate);
+  await syncRecovery(scoreByDate);
+  const forgiven = S.forgivenSet(recovery.history, scoreByDate);
+  const stk = S.streak(scoreByDate, today, forgiven);
+  const best = S.bestStreak(scoreByDate, forgiven);
+  const marker = recoveryMarker(scoreByDate, forgiven);
   const alert = S.balanceAlert(pointsByDate, S.prevDate(today));
   const monthScores = rows.filter(r => r.date.slice(0, 7) === today.slice(0, 7)).map(r => r.score).concat(score);
   const monthAvg = Math.round(monthScores.reduce((a, b) => a + b, 0) / monthScores.length);
@@ -555,7 +596,7 @@ async function renderToday() {
   $('#view').innerHTML = `
     <div class="headrow">
       <div><h1>Today</h1><p>${fmtLongDate(today)}</p></div>
-      <div class="streak">🔥 ${stk} <small>DAYS</small></div>
+      <div class="streak">🔥 ${stk}${marker} <small>DAYS</small></div>
     </div>
     ${missionHtml}
     ${friendsHtml}
