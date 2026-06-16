@@ -7,6 +7,7 @@ import {
   elapsedMinutes, fmtElapsed,
   bestStreak,
   RECOVERY, daysBetween, recoveryWindowEndMs, recoveryEligibleDates,
+  fmtCountdown,
 } from '../score.js';
 
 const T = { ...DEFAULT_TARGETS }; // {skill:240, uni:120, health:60, fin:20, eng:30, mind:10}
@@ -186,4 +187,13 @@ test('recovery constants', () => {
   assert.equal(RECOVERY.COOLDOWN_DAYS, 30);
   assert.equal(RECOVERY.GREEN, 80);
   assert.equal(RECOVERY.MAX_BREAK_AGE, 4); // don't surface breaks older than window + 1 day grace
+});
+
+test('fmtCountdown: Hh Mm above an hour, Mm under, 0m at/after expiry', () => {
+  const now = Date.parse('2026-06-16T00:00:00');
+  assert.equal(fmtCountdown(now + (47 * 60 + 12) * 60000, now), '47h 12m');
+  assert.equal(fmtCountdown(now + 12 * 60000, now), '12m');
+  assert.equal(fmtCountdown(now + 60 * 60000, now), '1h 0m');
+  assert.equal(fmtCountdown(now, now), '0m');
+  assert.equal(fmtCountdown(now - 5000, now), '0m'); // already expired clamps to 0
 });

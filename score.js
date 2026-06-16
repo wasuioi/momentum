@@ -153,3 +153,9 @@ export function recoveryWindowEndMs(brokenDate) {
 export function recoveryEligibleDates(brokenDate) {
   return [addDays(brokenDate, 1), addDays(brokenDate, 2)];
 }
+
+export function fmtCountdown(endMs, nowMs) {
+  const totalMin = Math.max(0, Math.floor((endMs - nowMs) / 60000));
+  const h = Math.floor(totalMin / 60);
+  return h > 0 ? `${h}h ${totalMin % 60}m` : `${totalMin % 60}m`;
+}
