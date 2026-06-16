@@ -564,6 +564,19 @@ function recoveryMarker(scoreByDate, forgiven) {
   return withF > 0 && withF > without ? ' ⭐' : '';
 }
 
+function recoveryBannerHtml(active) {
+  const endMs = S.recoveryWindowEndMs(active.broken_date);
+  return `<div class="recovery" data-recovery>
+    <div class="rec-head">💔 Your streak was broken — but you can bring it back.</div>
+    <p class="rec-body">Complete <b>1 Green Day</b> (score ≥ 80) to recover your
+      <b>${active.protected_streak}-day</b> streak.</p>
+    <div class="rec-foot">
+      <span>Progress <b>0 / 1 Green Day</b></span>
+      <span>Time remaining <b data-countdown="${endMs}">${S.fmtCountdown(endMs, Date.now())}</b></span>
+    </div>
+  </div>`;
+}
+
 async function renderToday() {
   const rows = await db.getDays(S.addDays(today, -60), S.prevDate(today));
   const scoreByDate = {}, pointsByDate = {};
@@ -615,6 +628,7 @@ async function renderToday() {
       <div><label>BIGGEST WIN TODAY</label>
         <input id="winput" placeholder="What are you most proud of today?" value="${esc(day.win)}"></div>
     </section>
+    ${recovery.active ? recoveryBannerHtml(recovery.active) : ''}
     ${alert ? `<div class="alert">⚠️ ${pillarName(alert.pillar)} below target — ${alert.days} days in a row</div>` : ''}
     <div class="pillars">
       ${PILLARS.map(p => pillarCard(p, points)).join('')}
@@ -731,6 +745,15 @@ function tick() {
   if (timer) {
     const txt = S.fmtElapsed(timer.started_at, Date.now());
     document.querySelectorAll('[data-elapsed]').forEach(el => { el.textContent = txt; });
+  }
+  document.querySelectorAll('[data-countdown]').forEach(el => {
+    el.textContent = S.fmtCountdown(Number(el.dataset.countdown), Date.now());
+  });
+  // when the window runs out while the user is on Today, re-render to resolve it (failure modal)
+  if (route().name === 'today' && !recoveryBusy && recovery.active &&
+      Date.now() >= S.recoveryWindowEndMs(recovery.active.broken_date)) {
+    recoveryBusy = true;
+    render().catch(e => { showError(e); console.error(e); }).finally(() => { recoveryBusy = false; });
   }
 }
 
