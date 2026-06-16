@@ -159,3 +159,14 @@ export function fmtCountdown(endMs, nowMs) {
   const h = Math.floor(totalMin / 60);
   return h > 0 ? `${h}h ${totalMin % 60}m` : `${totalMin % 60}m`;
 }
+
+// recovered broken_dates whose green day still scores >= GREEN (reverted/expired excluded; §6.3)
+export function forgivenSet(history, scoreByDate) {
+  const s = new Set();
+  for (const h of history) {
+    if (h.outcome === 'recovered' && (scoreByDate[h.recovered_date] ?? 0) >= RECOVERY.GREEN) {
+      s.add(h.broken_date);
+    }
+  }
+  return s;
+}

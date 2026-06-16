@@ -7,7 +7,7 @@ import {
   elapsedMinutes, fmtElapsed,
   bestStreak,
   RECOVERY, daysBetween, recoveryWindowEndMs, recoveryEligibleDates,
-  fmtCountdown,
+  fmtCountdown, forgivenSet,
 } from '../score.js';
 
 const T = { ...DEFAULT_TARGETS }; // {skill:240, uni:120, health:60, fin:20, eng:30, mind:10}
@@ -196,4 +196,20 @@ test('fmtCountdown: Hh Mm above an hour, Mm under, 0m at/after expiry', () => {
   assert.equal(fmtCountdown(now + 60 * 60000, now), '1h 0m');
   assert.equal(fmtCountdown(now, now), '0m');
   assert.equal(fmtCountdown(now - 5000, now), '0m'); // already expired clamps to 0
+});
+
+test('forgivenSet: only recovered entries whose green day still scores >= 80', () => {
+  const history = [
+    { outcome: 'recovered', broken_date: '2026-06-01', recovered_date: '2026-06-02' }, // green ok
+    { outcome: 'recovered', broken_date: '2026-06-10', recovered_date: '2026-06-11' }, // green now < 80
+    { outcome: 'reverted',  broken_date: '2026-06-20', recovered_date: '2026-06-21' }, // excluded
+    { outcome: 'expired',   broken_date: '2026-06-25' },                                // excluded
+  ];
+  const scoreByDate = { '2026-06-02': 90, '2026-06-11': 50, '2026-06-21': 90 };
+  const f = forgivenSet(history, scoreByDate);
+  assert.equal(f.has('2026-06-01'), true);
+  assert.equal(f.has('2026-06-10'), false); // revoke condition: green dropped below 80
+  assert.equal(f.has('2026-06-20'), false);
+  assert.equal(f.has('2026-06-25'), false);
+  assert.equal(f.size, 1);
 });
