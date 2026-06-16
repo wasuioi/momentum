@@ -213,3 +213,16 @@ test('forgivenSet: only recovered entries whose green day still scores >= 80', (
   assert.equal(f.has('2026-06-25'), false);
   assert.equal(f.size, 1);
 });
+
+test('streak: bridges a forgiven break without counting it', () => {
+  // 3-day run through 06-10, 06-11 missing (a recovered break), 06-12 green
+  const s = { '2026-06-08': 80, '2026-06-09': 80, '2026-06-10': 80, '2026-06-12': 85 };
+  assert.equal(streak(s, '2026-06-12'), 1);                                  // no bridging: only 06-12
+  assert.equal(streak(s, '2026-06-12', new Set(['2026-06-11'])), 4);         // bridge 06-11, it adds 0
+});
+
+test('bestStreak: bridges a forgiven break without counting it', () => {
+  const s = { '2026-06-08': 80, '2026-06-09': 80, '2026-06-10': 80, '2026-06-12': 85 };
+  assert.equal(bestStreak(s), 3);                                            // longest raw run = 3
+  assert.equal(bestStreak(s, new Set(['2026-06-11'])), 4);                   // bridged run = 4
+});

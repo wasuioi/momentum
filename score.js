@@ -55,11 +55,15 @@ export function startOfWeek(dateStr) {
 
 // ---- streak ----
 
-export function streak(scoreByDate, todayStr) {
+export function streak(scoreByDate, todayStr, forgiven = new Set()) {
   let d = todayStr;
   if ((scoreByDate[d] ?? 0) < 40) d = prevDate(d); // today is still in progress
   let n = 0;
-  while ((scoreByDate[d] ?? 0) >= 40) { n++; d = prevDate(d); }
+  while (true) {
+    if ((scoreByDate[d] ?? 0) >= 40) { n++; d = prevDate(d); continue; }
+    if (forgiven.has(d)) { d = prevDate(d); continue; } // bridge a recovered break, don't count it
+    break;
+  }
   return n;
 }
 
@@ -124,15 +128,20 @@ export function fmtElapsed(startedAtIso, nowMs) {
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-export function bestStreak(scoreByDate) {
-  const dates = Object.keys(scoreByDate).sort();
+export function bestStreak(scoreByDate, forgiven = new Set()) {
+  const dates = Object.keys(scoreByDate).filter(d => scoreByDate[d] >= 40).sort();
   let best = 0, run = 0, prev = null;
   for (const d of dates) {
-    if (scoreByDate[d] >= 40) {
-      run = (prev !== null && prevDate(d) === prev) ? run + 1 : 1;
-      best = Math.max(best, run);
-      prev = d;
-    } else { run = 0; prev = null; }
+    if (prev === null) {
+      run = 1;
+    } else {
+      // a run continues across a gap only if every day in the gap is forgiven (each adds 0)
+      let g = prevDate(d), bridged = true;
+      while (g > prev) { if (!forgiven.has(g)) { bridged = false; break; } g = prevDate(g); }
+      run = (bridged && g === prev) ? run + 1 : 1;
+    }
+    best = Math.max(best, run);
+    prev = d;
   }
   return best;
 }
