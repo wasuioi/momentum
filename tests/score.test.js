@@ -345,3 +345,18 @@ test('evaluateRecovery: revoke after the window already passed -> failure', () =
   assert.equal(r.next.history[0].outcome, 'reverted');
   assert.equal(r.next.history.at(-1).outcome, 'expired');
 });
+
+test('evaluateRecovery: revoking a stale recovery never clobbers an in-flight active', () => {
+  // an old recovery (May) whose green day later dropped below 80, AND a new active recovery (June)
+  // that is still ticking. Reconciling the stale May entry must NOT overwrite the live June active.
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 10, '2026-05-02': 50 };
+  const active = { broken_date: '2026-06-15', protected_streak: 7,
+    condition: { type: 'green_day', required: 1, min_score: 80 } };
+  const state = { version: 1, active, history: [
+    { outcome: 'recovered', broken_date: '2026-05-01', recovered_date: '2026-05-02', protected_streak: 9 }] };
+  const r = evaluateRecovery(state, s, '2026-06-16', NOON('2026-06-16'));
+  assert.equal(r.event, 'banner');                       // June recovery resolved normally, not clobbered
+  assert.equal(r.next.active.broken_date, '2026-06-15'); // still the June active, not May
+  assert.equal(r.next.history[0].outcome, 'recovered');  // stale May entry left intact while active in flight
+  assert.ok(!r.next.history.some(h => h.outcome === 'expired'));
+});

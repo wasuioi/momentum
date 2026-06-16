@@ -240,24 +240,29 @@ export function evaluateRecovery(state, scoreByDate, todayStr, nowMs) {
   const history = state.history.map(h => ({ ...h }));      // clone; one controlled mutation allowed (§5)
   let active = state.active ? { ...state.active } : null;
 
-  // STEP 1 — revoke the most recent recovery if its green day fell below 80 (§6.3)
-  for (let i = history.length - 1; i >= 0; i--) {
-    if (history[i].outcome !== 'recovered') continue;
-    const r = history[i];
-    if ((scoreByDate[r.recovered_date] ?? 0) < RECOVERY.GREEN) {
-      history[i] = { ...r, outcome: 'reverted', reverted_on: todayStr };
-      if (nowMs < recoveryWindowEndMs(r.broken_date)) {     // window still open -> reopen
-        active = { broken_date: r.broken_date, protected_streak: r.protected_streak, condition: RECOVERY_CONDITION };
-        return { next: { ...state, active, history }, event: 'banner', changed: true,
-          payload: { broken_date: r.broken_date, protected_streak: r.protected_streak,
-            window_end_ms: recoveryWindowEndMs(r.broken_date) } };
+  // STEP 1 — revoke the most recent recovery if its green day fell below 80 (§6.3).
+  // Skip while a newer recovery is already in flight: forgivenSet() already un-bridges an
+  // invalid green day (so the streak stays correct), and reopening/expiring here would
+  // clobber the live `active`. The stale entry is reconciled later, once `active` clears.
+  if (!active) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].outcome !== 'recovered') continue;
+      const r = history[i];
+      if ((scoreByDate[r.recovered_date] ?? 0) < RECOVERY.GREEN) {
+        history[i] = { ...r, outcome: 'reverted', reverted_on: todayStr };
+        if (nowMs < recoveryWindowEndMs(r.broken_date)) {     // window still open -> reopen
+          active = { broken_date: r.broken_date, protected_streak: r.protected_streak, condition: RECOVERY_CONDITION };
+          return { next: { ...state, active, history }, event: 'banner', changed: true,
+            payload: { broken_date: r.broken_date, protected_streak: r.protected_streak,
+              window_end_ms: recoveryWindowEndMs(r.broken_date) } };
+        }
+        history.push({ outcome: 'expired', broken_date: r.broken_date,             // window passed -> fail
+          protected_streak: r.protected_streak, resolved_on: todayStr });
+        return { next: { ...state, active: null, history }, event: 'failure', changed: true,
+          payload: { broken_date: r.broken_date, protected_streak: r.protected_streak } };
       }
-      history.push({ outcome: 'expired', broken_date: r.broken_date,             // window passed -> fail
-        protected_streak: r.protected_streak, resolved_on: todayStr });
-      return { next: { ...state, active: null, history }, event: 'failure', changed: true,
-        payload: { broken_date: r.broken_date, protected_streak: r.protected_streak } };
+      break; // only the most recent recovered entry is reconciled
     }
-    break; // only the most recent recovered entry is reconciled
   }
 
   const forgiven = forgivenSet(history, scoreByDate);
