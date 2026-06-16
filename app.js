@@ -216,7 +216,7 @@ async function renderMonth() {
   const avg = monthRows.length ? Math.round(monthRows.reduce((a, r) => a + r.score, 0) / monthRows.length) : 0;
   const greens = monthRows.filter(r => r.score >= 80).length;
   const scoreByDate = {}; for (const r of monthRows) scoreByDate[r.date] = r.score;
-  const best = S.bestStreak(scoreByDate);
+  const best = S.bestStreak(scoreByDate, S.forgivenSet(recovery.history, scoreByDate));
 
   // life trend — always anchored to today (spec §7)
   const trendRows = {};
