@@ -45,6 +45,11 @@
   <button id="retry">Retry</button>
 </div>
 
+<!-- recovery success / failure modal -->
+<div id="modal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal-card" id="modal-card"></div>
+</div>
+
 <script>
   // module-graph failures (bad config.js URL, CDN down) happen before app.js runs —
   // surface them in the banner instead of a silent stuck "Loading…"

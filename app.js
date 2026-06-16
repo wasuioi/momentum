@@ -564,6 +564,27 @@ function recoveryMarker(scoreByDate, forgiven) {
   return withF > 0 && withF > without ? ' ⭐' : '';
 }
 
+function showRecoveryModal(kind, payload) {
+  const card = $('#modal-card');
+  if (kind === 'success') {
+    card.innerHTML = `
+      <div class="modal-emoji">🔥 ${payload.streak} ⭐</div>
+      <h2>Welcome back.</h2>
+      <p>You lost momentum for a moment, but you chose to return.<br>
+         That's what real consistency looks like. Keep going.</p>
+      <p class="modal-sub">streak recovered</p>
+      <button class="btn" data-action="closemodal">Keep going</button>`;
+  } else {
+    card.innerHTML = `
+      <div class="modal-emoji">🔥 0</div>
+      <h2>You didn't recover this streak — and that's okay.</h2>
+      <p>Starting again doesn't erase the progress you've already made.
+         Every meaningful journey includes restarts. Today can be Day 1.</p>
+      <button class="btn" data-action="closemodal">Start again</button>`;
+  }
+  $('#modal').classList.remove('hidden');
+}
+
 function recoveryBannerHtml(active) {
   const endMs = S.recoveryWindowEndMs(active.broken_date);
   return `<div class="recovery" data-recovery>
@@ -823,6 +844,8 @@ document.body.addEventListener('click', async ev => {
       URL.revokeObjectURL(link.href);
     } else if (a === 'logout') {
       await db.signOut(); location.reload();
+    } else if (a === 'closemodal') {
+      $('#modal').classList.add('hidden');
     }
   } catch (e) { showError(e); throw e; }
 });
