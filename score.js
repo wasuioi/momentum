@@ -136,3 +136,20 @@ export function bestStreak(scoreByDate) {
   }
   return best;
 }
+
+// ---- streak recovery (spec: docs/superpowers/specs/2026-06-16-streak-recovery-design.md) ----
+
+export const RECOVERY = { MIN_STREAK: 7, COOLDOWN_DAYS: 30, GREEN: 80, MAX_BREAK_AGE: 4 };
+
+export function daysBetween(fromStr, toStr) {
+  return Math.round((Date.parse(toStr + 'T00:00:00') - Date.parse(fromStr + 'T00:00:00')) / 86400000);
+}
+
+// window derived from the first broken day: [broken+1 00:00, broken+3 00:00)
+export function recoveryWindowEndMs(brokenDate) {
+  return Date.parse(addDays(brokenDate, 3) + 'T00:00:00');
+}
+
+export function recoveryEligibleDates(brokenDate) {
+  return [addDays(brokenDate, 1), addDays(brokenDate, 2)];
+}

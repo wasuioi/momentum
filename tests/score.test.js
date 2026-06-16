@@ -6,6 +6,7 @@ import {
   balanceAlert, lifeTrend,
   elapsedMinutes, fmtElapsed,
   bestStreak,
+  RECOVERY, daysBetween, recoveryWindowEndMs, recoveryEligibleDates,
 } from '../score.js';
 
 const T = { ...DEFAULT_TARGETS }; // {skill:240, uni:120, health:60, fin:20, eng:30, mind:10}
@@ -167,4 +168,22 @@ test('bestStreak finds the longest >=40 run anywhere in history', () => {
     '2026-06-01': 80, '2026-06-02': 45, '2026-06-03': 20, // run of 2
     '2026-06-05': 80, '2026-06-06': 80, '2026-06-07': 80, // gap on 04, run of 3
   }), 3);
+});
+
+test('daysBetween counts whole calendar days', () => {
+  assert.equal(daysBetween('2026-06-01', '2026-06-30'), 29);
+  assert.equal(daysBetween('2026-06-01', '2026-06-01'), 0);
+  assert.equal(daysBetween('2026-06-15', '2026-07-15'), 30);
+});
+
+test('recovery window: end is 00:00 of broken_date + 3 days; eligible dates are +1 and +2', () => {
+  assert.equal(recoveryWindowEndMs('2026-06-15'), Date.parse('2026-06-18T00:00:00'));
+  assert.deepEqual(recoveryEligibleDates('2026-06-15'), ['2026-06-16', '2026-06-17']);
+});
+
+test('recovery constants', () => {
+  assert.equal(RECOVERY.MIN_STREAK, 7);
+  assert.equal(RECOVERY.COOLDOWN_DAYS, 30);
+  assert.equal(RECOVERY.GREEN, 80);
+  assert.equal(RECOVERY.MAX_BREAK_AGE, 4); // don't surface breaks older than window + 1 day grace
 });
