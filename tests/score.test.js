@@ -8,6 +8,7 @@ import {
   bestStreak,
   RECOVERY, daysBetween, recoveryWindowEndMs, recoveryEligibleDates,
   fmtCountdown, forgivenSet,
+  evaluateRecovery,
 } from '../score.js';
 
 const T = { ...DEFAULT_TARGETS }; // {skill:240, uni:120, health:60, fin:20, eng:30, mind:10}
@@ -225,4 +226,122 @@ test('bestStreak: bridges a forgiven break without counting it', () => {
   const s = { '2026-06-08': 80, '2026-06-09': 80, '2026-06-10': 80, '2026-06-12': 85 };
   assert.equal(bestStreak(s), 3);                                            // longest raw run = 3
   assert.equal(bestStreak(s, new Set(['2026-06-11'])), 4);                   // bridged run = 4
+});
+
+// ---- evaluateRecovery ----
+const EMPTY_REC = { version: 1, active: null, history: [] };
+const NOON = d => Date.parse(d + 'T12:00:00'); // a "now" inside day d
+// build n consecutive green days (score 90) ending at `end`
+function greenRun(end, n) {
+  const out = {}; let d = end;
+  for (let i = 0; i < n; i++) { out[d] = 90; d = prevDate(d); }
+  return out;
+}
+
+test('evaluateRecovery: fresh break on a >=7 streak opens a banner', () => {
+  // 7 green days through Sun 06-14, Mon 06-15 missing (break), today Tue 06-16, not yet green
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 10 };
+  const r = evaluateRecovery(EMPTY_REC, s, '2026-06-16', NOON('2026-06-16'));
+  assert.equal(r.event, 'banner');
+  assert.equal(r.changed, true);
+  assert.equal(r.next.active.broken_date, '2026-06-15');
+  assert.equal(r.next.active.protected_streak, 7);
+});
+
+test('evaluateRecovery: break on a <7 streak does nothing', () => {
+  const s = { ...greenRun('2026-06-14', 6), '2026-06-16': 10 };
+  const r = evaluateRecovery(EMPTY_REC, s, '2026-06-16', NOON('2026-06-16'));
+  assert.equal(r.event, null);
+  assert.equal(r.changed, false);
+  assert.equal(r.next.active, null);
+});
+
+test('evaluateRecovery: a Green Day today inside the window recovers', () => {
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 85 }; // today is green
+  const r = evaluateRecovery(EMPTY_REC, s, '2026-06-16', NOON('2026-06-16'));
+  assert.equal(r.event, 'success');
+  assert.equal(r.next.active, null);
+  const h = r.next.history.at(-1);
+  assert.equal(h.outcome, 'recovered');
+  assert.equal(h.broken_date, '2026-06-15');
+  assert.equal(h.recovered_date, '2026-06-16');
+});
+
+test('evaluateRecovery: window expires with no Green Day -> failure, no active', () => {
+  // break Mon 06-15; window ends 06-18 00:00; now Thu 06-18 noon; nothing green after
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 10, '2026-06-17': 10 };
+  const active = { broken_date: '2026-06-15', protected_streak: 7,
+    condition: { type: 'green_day', required: 1, min_score: 80 } };
+  const r = evaluateRecovery({ ...EMPTY_REC, active }, s, '2026-06-18', NOON('2026-06-18'));
+  assert.equal(r.event, 'failure');
+  assert.equal(r.next.active, null);
+  assert.equal(r.next.history.at(-1).outcome, 'expired');
+});
+
+test('evaluateRecovery: retroactive success when an eligible day was green but app opened late', () => {
+  // break Mon 06-15; Tue 06-16 was green; user opens Wed 06-17 (still in window)
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 88, '2026-06-17': 10 };
+  const r = evaluateRecovery(EMPTY_REC, s, '2026-06-17', NOON('2026-06-17'));
+  assert.equal(r.event, 'success');
+  assert.equal(r.next.history.at(-1).recovered_date, '2026-06-16');
+});
+
+test('evaluateRecovery: opened after window expired -> failure once, never a transient active', () => {
+  // break Mon 06-15; no green; user opens Fri 06-19 (window ended 06-18 00:00)
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 10, '2026-06-17': 10, '2026-06-18': 10 };
+  const r = evaluateRecovery(EMPTY_REC, s, '2026-06-19', NOON('2026-06-19'));
+  assert.equal(r.event, 'failure');
+  assert.equal(r.next.active, null);
+  assert.equal(r.next.history.at(-1).outcome, 'expired');
+});
+
+test('evaluateRecovery: dedupe -> an already-expired break is not re-offered', () => {
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 10 };
+  const state = { ...EMPTY_REC, history: [
+    { outcome: 'expired', broken_date: '2026-06-15', protected_streak: 7, resolved_on: '2026-06-18' }] };
+  const r = evaluateRecovery(state, s, '2026-06-16', NOON('2026-06-16'));
+  assert.equal(r.event, null);
+  assert.equal(r.changed, false);
+});
+
+test('evaluateRecovery: cooldown blocks a new recovery within 30 days of last recovered_date', () => {
+  // recovered on 06-02 (its green day still scores 90, so it is NOT revoked);
+  // new break on 06-15 is only 13 days later -> blocked by the 30-day cooldown
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 10, '2026-06-02': 90 };
+  const state = { ...EMPTY_REC, history: [
+    { outcome: 'recovered', broken_date: '2026-06-01', recovered_date: '2026-06-02', protected_streak: 9 }] };
+  const r = evaluateRecovery(state, s, '2026-06-16', NOON('2026-06-16'));
+  assert.equal(r.event, null);
+  assert.equal(r.changed, false);
+});
+
+test('evaluateRecovery: a reverted entry does NOT trigger cooldown', () => {
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 10 };
+  const state = { ...EMPTY_REC, history: [
+    { outcome: 'reverted', broken_date: '2026-06-01', recovered_date: '2026-06-02', protected_streak: 9 }] };
+  const r = evaluateRecovery(state, s, '2026-06-16', NOON('2026-06-16'));
+  assert.equal(r.event, 'banner'); // reverted is ignored by cooldown -> recovery offered
+});
+
+test('evaluateRecovery: revoke when a recovered green day drops below 80 (window still open -> reopen)', () => {
+  // recovered Mon 06-15 via Tue 06-16; Tue later edited to 50; today Wed 06-17 (window open until 06-18)
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 50, '2026-06-17': 10 };
+  const state = { ...EMPTY_REC, history: [
+    { outcome: 'recovered', broken_date: '2026-06-15', recovered_date: '2026-06-16', protected_streak: 7 }] };
+  const r = evaluateRecovery(state, s, '2026-06-17', NOON('2026-06-17'));
+  assert.equal(r.event, 'banner');
+  assert.equal(r.changed, true);
+  assert.equal(r.next.active.broken_date, '2026-06-15');
+  assert.equal(r.next.history[0].outcome, 'reverted');
+});
+
+test('evaluateRecovery: revoke after the window already passed -> failure', () => {
+  const s = { ...greenRun('2026-06-14', 7), '2026-06-16': 50, '2026-06-17': 10, '2026-06-18': 10 };
+  const state = { ...EMPTY_REC, history: [
+    { outcome: 'recovered', broken_date: '2026-06-15', recovered_date: '2026-06-16', protected_streak: 7 }] };
+  const r = evaluateRecovery(state, s, '2026-06-19', NOON('2026-06-19'));
+  assert.equal(r.event, 'failure');
+  assert.equal(r.next.active, null);
+  assert.equal(r.next.history[0].outcome, 'reverted');
+  assert.equal(r.next.history.at(-1).outcome, 'expired');
 });
