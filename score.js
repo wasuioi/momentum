@@ -55,11 +55,15 @@ export function startOfWeek(dateStr) {
 
 // ---- streak ----
 
-export function streak(scoreByDate, todayStr) {
+export function streak(scoreByDate, todayStr, forgiven = new Set()) {
   let d = todayStr;
   if ((scoreByDate[d] ?? 0) < 40) d = prevDate(d); // today is still in progress
   let n = 0;
-  while ((scoreByDate[d] ?? 0) >= 40) { n++; d = prevDate(d); }
+  while (true) {
+    if ((scoreByDate[d] ?? 0) >= 40) { n++; d = prevDate(d); continue; }
+    if (forgiven.has(d)) { d = prevDate(d); continue; } // bridge a recovered break, don't count it
+    break;
+  }
   return n;
 }
 
@@ -124,15 +128,155 @@ export function fmtElapsed(startedAtIso, nowMs) {
   return h ? `${h}:${mm}:${ss}` : `${mm}:${ss}`;
 }
 
-export function bestStreak(scoreByDate) {
-  const dates = Object.keys(scoreByDate).sort();
+export function bestStreak(scoreByDate, forgiven = new Set()) {
+  const dates = Object.keys(scoreByDate).filter(d => scoreByDate[d] >= 40).sort();
   let best = 0, run = 0, prev = null;
   for (const d of dates) {
-    if (scoreByDate[d] >= 40) {
-      run = (prev !== null && prevDate(d) === prev) ? run + 1 : 1;
-      best = Math.max(best, run);
-      prev = d;
-    } else { run = 0; prev = null; }
+    if (prev === null) {
+      run = 1;
+    } else {
+      // a run continues across a gap only if every day in the gap is forgiven (each adds 0)
+      let g = prevDate(d), bridged = true;
+      while (g > prev) { if (!forgiven.has(g)) { bridged = false; break; } g = prevDate(g); }
+      run = (bridged && g === prev) ? run + 1 : 1;
+    }
+    best = Math.max(best, run);
+    prev = d;
   }
   return best;
+}
+
+// ---- streak recovery (spec: docs/superpowers/specs/2026-06-16-streak-recovery-design.md) ----
+
+export const RECOVERY = { MIN_STREAK: 7, COOLDOWN_DAYS: 30, GREEN: 80, MAX_BREAK_AGE: 4 };
+
+export function daysBetween(fromStr, toStr) {
+  return Math.round((Date.parse(toStr + 'T00:00:00') - Date.parse(fromStr + 'T00:00:00')) / 86400000);
+}
+
+// window derived from the first broken day: [broken+1 00:00, broken+3 00:00)
+export function recoveryWindowEndMs(brokenDate) {
+  return Date.parse(addDays(brokenDate, 3) + 'T00:00:00');
+}
+
+export function recoveryEligibleDates(brokenDate) {
+  return [addDays(brokenDate, 1), addDays(brokenDate, 2)];
+}
+
+export function fmtCountdown(endMs, nowMs) {
+  const totalMin = Math.max(0, Math.floor((endMs - nowMs) / 60000));
+  const h = Math.floor(totalMin / 60);
+  return h > 0 ? `${h}h ${totalMin % 60}m` : `${totalMin % 60}m`;
+}
+
+// recovered broken_dates whose green day still scores >= GREEN (reverted/expired excluded; §6.3)
+export function forgivenSet(history, scoreByDate) {
+  const s = new Set();
+  for (const h of history) {
+    if (h.outcome === 'recovered' && (scoreByDate[h.recovered_date] ?? 0) >= RECOVERY.GREEN) {
+      s.add(h.broken_date);
+    }
+  }
+  return s;
+}
+
+const RECOVERY_CONDITION = { type: 'green_day', required: 1, min_score: RECOVERY.GREEN };
+
+function isResolved(history, brokenDate) {
+  return history.some(h => h.broken_date === brokenDate &&
+    (h.outcome === 'recovered' || h.outcome === 'expired'));
+}
+
+function latestRecoveredDate(history) {
+  let latest = null;
+  for (const h of history) {
+    if (h.outcome === 'recovered' && (!latest || h.recovered_date > latest)) latest = h.recovered_date;
+  }
+  return latest;
+}
+
+// Find the most recent break cluster and anchor to its EARLIEST day (the spec's
+// "earliest unresolved broken day"), plus the streak it interrupted. A break is only
+// actionable within MAX_BREAK_AGE days, so an old break followed by good days (organic
+// recovery) is never surfaced as a stale failure.
+function scanBreak(scoreByDate, todayStr, forgiven) {
+  const recorded = Object.keys(scoreByDate);
+  if (recorded.length === 0) return null;
+  const earliest = recorded.sort()[0];
+  const horizon = addDays(todayStr, -RECOVERY.MAX_BREAK_AGE);
+  const broken = dt => (scoreByDate[dt] ?? 0) < 40 && !forgiven.has(dt);
+  // most recent completed broken day within the horizon (skips good days after a break)
+  let d = prevDate(todayStr);
+  while (d >= earliest && d >= horizon && !broken(d)) d = prevDate(d);
+  if (!(d >= earliest && d >= horizon && broken(d))) return null;
+  // walk back to the earliest day of this contiguous broken cluster
+  let b = d;
+  while (b > earliest && broken(prevDate(b))) b = prevDate(b);
+  return { firstBroken: b, protectedStreak: streak(scoreByDate, prevDate(b), forgiven) };
+}
+
+function resolveActive(state, active, history, scoreByDate, todayStr, nowMs, isNew) {
+  const greenDate = recoveryEligibleDates(active.broken_date)
+    .filter(dt => dt <= todayStr)
+    .find(dt => (scoreByDate[dt] ?? 0) >= RECOVERY.GREEN);
+  if (greenDate) {
+    history.push({ outcome: 'recovered', broken_date: active.broken_date, recovered_date: greenDate,
+      protected_streak: active.protected_streak, resolved_on: todayStr });
+    return { next: { ...state, active: null, history }, event: 'success', changed: true,
+      payload: { broken_date: active.broken_date, protected_streak: active.protected_streak } };
+  }
+  if (nowMs >= recoveryWindowEndMs(active.broken_date)) {
+    history.push({ outcome: 'expired', broken_date: active.broken_date,
+      protected_streak: active.protected_streak, resolved_on: todayStr });
+    return { next: { ...state, active: null, history }, event: 'failure', changed: true,
+      payload: { broken_date: active.broken_date, protected_streak: active.protected_streak } };
+  }
+  return { next: { ...state, active, history }, event: 'banner', changed: isNew,
+    payload: { broken_date: active.broken_date, protected_streak: active.protected_streak,
+      window_end_ms: recoveryWindowEndMs(active.broken_date) } };
+}
+
+export function evaluateRecovery(state, scoreByDate, todayStr, nowMs) {
+  const history = state.history.map(h => ({ ...h }));      // clone; one controlled mutation allowed (§5)
+  let active = state.active ? { ...state.active } : null;
+
+  // STEP 1 — revoke the most recent recovery if its green day fell below 80 (§6.3).
+  // Skip while a newer recovery is already in flight: forgivenSet() already un-bridges an
+  // invalid green day (so the streak stays correct), and reopening/expiring here would
+  // clobber the live `active`. The stale entry is reconciled later, once `active` clears.
+  if (!active) {
+    for (let i = history.length - 1; i >= 0; i--) {
+      if (history[i].outcome !== 'recovered') continue;
+      const r = history[i];
+      if ((scoreByDate[r.recovered_date] ?? 0) < RECOVERY.GREEN) {
+        history[i] = { ...r, outcome: 'reverted', reverted_on: todayStr };
+        if (nowMs < recoveryWindowEndMs(r.broken_date)) {     // window still open -> reopen
+          active = { broken_date: r.broken_date, protected_streak: r.protected_streak, condition: RECOVERY_CONDITION };
+          return { next: { ...state, active, history }, event: 'banner', changed: true,
+            payload: { broken_date: r.broken_date, protected_streak: r.protected_streak,
+              window_end_ms: recoveryWindowEndMs(r.broken_date) } };
+        }
+        history.push({ outcome: 'expired', broken_date: r.broken_date,             // window passed -> fail
+          protected_streak: r.protected_streak, resolved_on: todayStr });
+        return { next: { ...state, active: null, history }, event: 'failure', changed: true,
+          payload: { broken_date: r.broken_date, protected_streak: r.protected_streak } };
+      }
+      break; // only the most recent recovered entry is reconciled
+    }
+  }
+
+  const forgiven = forgivenSet(history, scoreByDate);
+
+  // STEP 2 — resolve an in-flight recovery
+  if (active) return resolveActive(state, active, history, scoreByDate, todayStr, nowMs, false);
+
+  // STEP 3 — detect a fresh break (dedupe + cooldown apply only here)
+  const scan = scanBreak(scoreByDate, todayStr, forgiven);
+  if (!scan || scan.protectedStreak < RECOVERY.MIN_STREAK) return { next: state, event: null, changed: false };
+  if (isResolved(history, scan.firstBroken)) return { next: state, event: null, changed: false };
+  const last = latestRecoveredDate(history);
+  if (last && daysBetween(last, scan.firstBroken) < RECOVERY.COOLDOWN_DAYS)
+    return { next: state, event: null, changed: false };
+  const candidate = { broken_date: scan.firstBroken, protected_streak: scan.protectedStreak, condition: RECOVERY_CONDITION };
+  return resolveActive(state, candidate, history, scoreByDate, todayStr, nowMs, true);
 }

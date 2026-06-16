@@ -23,6 +23,8 @@ let targets = { ...S.DEFAULT_TARGETS };
 let mission = null;             // {title, deadline, progress} | null
 let profile = null;             // {display_name} | null
 let timer = null;               // {pillar, started_at, share_note?: boolean} | null
+let recovery = { version: 1, active: null, history: [] };
+let recoveryBusy = false; // guards the expiry re-render in tick()
 let shareNote = {};             // per-pillar live note sharing for the current tracking context
 let today = S.toDateStr(new Date());
 let day = emptyDay();           // today's data (spec §5 shape)
@@ -87,7 +89,9 @@ async function boot() {
   mission = await db.getState('mission', null);
   timer = await db.getState('timer', null);
   if (timer?.pillar) shareNote = { ...shareNote, [timer.pillar]: !!timer.share_note };
+  recovery = await db.getRecovery();
   await loadToday();
+  await syncRecovery(await buildScoreByDate()); // catch banner/modal regardless of landing view
   window.addEventListener('hashchange', render);
   setInterval(tick, 1000);
   await render();
@@ -148,7 +152,9 @@ async function renderWeek() {
   const avg = weekRows.length ? Math.round(weekRows.reduce((a, r) => a + r.score, 0) / weekRows.length) : 0;
   const greens = weekRows.filter(r => r.score >= 80).length;
   const scoreByDate = {}; for (const r of rows) scoreByDate[r.date] = r.score;
-  const stk = S.streak(scoreByDate, today);
+  const forgiven = S.forgivenSet(recovery.history, scoreByDate);
+  const stk = S.streak(scoreByDate, today, forgiven);
+  const wkMarker = recoveryMarker(scoreByDate, forgiven);
 
   const hours = PILLARS.map(p => ({
     p, mins: weekRows.reduce((a, r) => a + (r.data.minutes?.[p.key] ?? 0), 0),
@@ -180,7 +186,7 @@ async function renderWeek() {
     <div class="stats3">
       <div class="stat3"><b>${avg}<small> avg</small></b><span>WEEK SCORE</span></div>
       <div class="stat3"><b>${greens}<small> /${weekRows.length}</small></b><span>GREEN DAYS</span></div>
-      <div class="stat3"><b>🔥 ${stk}</b><span>STREAK</span></div>
+      <div class="stat3"><b>🔥 ${stk}${wkMarker}</b><span>STREAK</span></div>
     </div>
     <section class="card"><h2>Hours by pillar</h2>${bars}</section>
     <section class="card"><h2>Insight</h2><div class="insight">✨<p>${insight}</p></div></section>
@@ -210,7 +216,7 @@ async function renderMonth() {
   const avg = monthRows.length ? Math.round(monthRows.reduce((a, r) => a + r.score, 0) / monthRows.length) : 0;
   const greens = monthRows.filter(r => r.score >= 80).length;
   const scoreByDate = {}; for (const r of monthRows) scoreByDate[r.date] = r.score;
-  const best = S.bestStreak(scoreByDate);
+  const best = S.bestStreak(scoreByDate, S.forgivenSet(recovery.history, scoreByDate));
 
   // life trend — always anchored to today (spec §7)
   const trendRows = {};
@@ -526,6 +532,72 @@ async function friendsNowHtml() {
     }).join('')}</section>`;
 }
 
+// last 60 days of scores + today's live score (same window the Today/Week views use)
+async function buildScoreByDate() {
+  const rows = await db.getDays(S.addDays(today, -60), S.prevDate(today));
+  const scoreByDate = {};
+  for (const r of rows) scoreByDate[r.date] = r.score;
+  scoreByDate[today] = S.dayScore(S.dayPoints(day, targets));
+  return scoreByDate;
+}
+
+// Reload-and-confirm guard (spec §8): always evaluate against the freshest stored state,
+// persist only on a real transition, then surface the one-shot modal.
+async function syncRecovery(scoreByDate) {
+  const latest = await db.getRecovery();
+  const res = S.evaluateRecovery(latest, scoreByDate, today, Date.now());
+  if (res.changed) await db.setRecovery(res.next);
+  recovery = res.next;
+  if (res.event === 'success') {
+    const forgiven = S.forgivenSet(recovery.history, scoreByDate);
+    showRecoveryModal('success', { streak: S.streak(scoreByDate, today, forgiven) });
+  } else if (res.event === 'failure') {
+    showRecoveryModal('failure', {});
+  }
+  return res;
+}
+
+// a single ⭐ when the current live streak bridges at least one forgiven break (never ⭐×N)
+function recoveryMarker(scoreByDate, forgiven) {
+  const withF = S.streak(scoreByDate, today, forgiven);
+  const without = S.streak(scoreByDate, today);
+  return withF > 0 && withF > without ? ' ⭐' : '';
+}
+
+function showRecoveryModal(kind, payload) {
+  const card = $('#modal-card');
+  if (kind === 'success') {
+    card.innerHTML = `
+      <div class="modal-emoji">🔥 ${payload.streak} ⭐</div>
+      <h2>Welcome back.</h2>
+      <p>You lost momentum for a moment, but you chose to return.<br>
+         That's what real consistency looks like. Keep going.</p>
+      <p class="modal-sub">streak recovered</p>
+      <button class="btn" data-action="closemodal">Keep going</button>`;
+  } else {
+    card.innerHTML = `
+      <div class="modal-emoji">🔥 0</div>
+      <h2>You didn't recover this streak — and that's okay.</h2>
+      <p>Starting again doesn't erase the progress you've already made.
+         Every meaningful journey includes restarts. Today can be Day 1.</p>
+      <button class="btn" data-action="closemodal">Start again</button>`;
+  }
+  $('#modal').classList.remove('hidden');
+}
+
+function recoveryBannerHtml(active) {
+  const endMs = S.recoveryWindowEndMs(active.broken_date);
+  return `<div class="recovery" data-recovery>
+    <div class="rec-head">💔 Your streak was broken — but you can bring it back.</div>
+    <p class="rec-body">Complete <b>1 Green Day</b> (score ≥ 80) to recover your
+      <b>${active.protected_streak}-day</b> streak.</p>
+    <div class="rec-foot">
+      <span>Progress <b>0 / 1 Green Day</b></span>
+      <span>Time remaining <b data-countdown="${endMs}">${S.fmtCountdown(endMs, Date.now())}</b></span>
+    </div>
+  </div>`;
+}
+
 async function renderToday() {
   const rows = await db.getDays(S.addDays(today, -60), S.prevDate(today));
   const scoreByDate = {}, pointsByDate = {};
@@ -535,8 +607,11 @@ async function renderToday() {
   const score = S.dayScore(points);
   const status = S.dayStatus(score);
   scoreByDate[today] = score;
-  const stk = S.streak(scoreByDate, today);
-  const best = S.bestStreak(scoreByDate);
+  await syncRecovery(scoreByDate);
+  const forgiven = S.forgivenSet(recovery.history, scoreByDate);
+  const stk = S.streak(scoreByDate, today, forgiven);
+  const best = S.bestStreak(scoreByDate, forgiven);
+  const marker = recoveryMarker(scoreByDate, forgiven);
   const alert = S.balanceAlert(pointsByDate, S.prevDate(today));
   const monthScores = rows.filter(r => r.date.slice(0, 7) === today.slice(0, 7)).map(r => r.score).concat(score);
   const monthAvg = Math.round(monthScores.reduce((a, b) => a + b, 0) / monthScores.length);
@@ -555,7 +630,7 @@ async function renderToday() {
   $('#view').innerHTML = `
     <div class="headrow">
       <div><h1>Today</h1><p>${fmtLongDate(today)}</p></div>
-      <div class="streak">🔥 ${stk} <small>DAYS</small></div>
+      <div class="streak">🔥 ${stk}${marker} <small>DAYS</small></div>
     </div>
     ${missionHtml}
     ${friendsHtml}
@@ -574,6 +649,7 @@ async function renderToday() {
       <div><label>BIGGEST WIN TODAY</label>
         <input id="winput" placeholder="What are you most proud of today?" value="${esc(day.win)}"></div>
     </section>
+    ${recovery.active ? recoveryBannerHtml(recovery.active) : ''}
     ${alert ? `<div class="alert">⚠️ ${pillarName(alert.pillar)} below target — ${alert.days} days in a row</div>` : ''}
     <div class="pillars">
       ${PILLARS.map(p => pillarCard(p, points)).join('')}
@@ -691,6 +767,15 @@ function tick() {
     const txt = S.fmtElapsed(timer.started_at, Date.now());
     document.querySelectorAll('[data-elapsed]').forEach(el => { el.textContent = txt; });
   }
+  document.querySelectorAll('[data-countdown]').forEach(el => {
+    el.textContent = S.fmtCountdown(Number(el.dataset.countdown), Date.now());
+  });
+  // when the window runs out while the user is on Today, re-render to resolve it (failure modal)
+  if (route().name === 'today' && !recoveryBusy && recovery.active &&
+      Date.now() >= S.recoveryWindowEndMs(recovery.active.broken_date)) {
+    recoveryBusy = true;
+    render().catch(e => { showError(e); console.error(e); }).finally(() => { recoveryBusy = false; });
+  }
 }
 
 // ---- events (delegated on body: views are re-rendered, listeners are not) ----
@@ -759,6 +844,8 @@ document.body.addEventListener('click', async ev => {
       URL.revokeObjectURL(link.href);
     } else if (a === 'logout') {
       await db.signOut(); location.reload();
+    } else if (a === 'closemodal') {
+      $('#modal').classList.add('hidden');
     }
   } catch (e) { showError(e); throw e; }
 });

@@ -268,3 +268,37 @@ button.mlabel{text-decoration:underline dotted var(--faint);text-underline-offse
 
 /* ===== a11y ===== */
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+
+/* ---- streak recovery banner ---- */
+.recovery {
+  background: linear-gradient(180deg, rgba(248,97,90,.14), rgba(248,97,90,.06));
+  border: 1px solid rgba(248,97,90,.45);
+  border-radius: 16px;
+  padding: 16px 18px;
+  margin: 12px 0;
+}
+.recovery .rec-head { font-weight: 700; font-size: 15px; margin-bottom: 6px; }
+.recovery .rec-body { margin: 0 0 12px; color: var(--muted, #9aa4b2); font-size: 14px; line-height: 1.5; }
+.recovery .rec-foot {
+  display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted, #9aa4b2);
+}
+.recovery .rec-foot b { color: #fff; font-variant-numeric: tabular-nums; }
+
+/* ---- recovery modal ---- */
+.modal {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(7,9,13,.72); backdrop-filter: blur(4px); padding: 24px;
+}
+.modal.hidden { display: none; }
+.modal-card {
+  background: #141821; border: 1px solid rgba(255,255,255,.08); border-radius: 20px;
+  padding: 28px 24px; max-width: 360px; width: 100%; text-align: center;
+  box-shadow: 0 24px 60px rgba(0,0,0,.5);
+}
+.modal-card .modal-emoji { font-size: 30px; font-weight: 800; margin-bottom: 12px; font-variant-numeric: tabular-nums; }
+.modal-card h2 { font-size: 18px; margin: 0 0 10px; }
+.modal-card p { color: var(--muted, #9aa4b2); font-size: 14px; line-height: 1.6; margin: 0 0 16px; }
+.modal-card .modal-sub { text-transform: uppercase; letter-spacing: .06em; font-size: 11px; margin-top: -8px; }
+.modal-card .btn { width: 100%; }

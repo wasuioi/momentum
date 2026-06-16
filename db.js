@@ -80,6 +80,14 @@ export async function setState(key, value) {
   if (error) throw error;
 }
 
+export async function getRecovery() {
+  return getState('recovery', { version: 1, active: null, history: [] });
+}
+
+export async function setRecovery(state) {
+  await setState('recovery', state);
+}
+
 export async function claimTimer(timer) {
   const userId = await requireUserId();
   const { data, error } = await sb.from('app_state')
